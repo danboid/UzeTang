@@ -32,7 +32,7 @@ OPT = [
      "Receptacles soldered to the board, as on the Uzebox"),
     ("952-2278-ND", 2, "CONN HEADER 8POS 2MM TH", "U2", "Solder these to the ESP-12F's castellated pads"),
     ("497-1491-5-ND", 1, "IC REG LDO 3.3V 0.8A TO220 (LD1117V33)", "U3",
-     "Powers the ESP-12F from the Tang's 5 V"),
+     "Powers the ESP-12F from the Tang's 5 V; mounted flat, tab down (optional M3 screw)"),
     ("P19607CT-ND", 2, "CAP ALUM 10UF RADIAL 5MM DIA 2MM PITCH", "C6, C7", "LDO input and output"),
     ("493-1041-ND", 1, "CAP ALUM 220UF RADIAL 6.3MM DIA 2.5MM PITCH", "C8", "ESP transmit peaks"),
     ("478-3192-ND", 1, "CAP CER .10UF 50V 20% RADIAL", "C9", ""),

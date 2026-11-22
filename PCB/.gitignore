@@ -9,3 +9,4 @@ gen/*.dsn
 gen/*.ses
 gen/fr.log
 gen/__pycache__/
+gen/logs/

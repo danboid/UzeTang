@@ -557,7 +557,7 @@
     (uuid 68cd8d18-da9d-5a46-b5a4-8d0f44d8f370)
     (property "Reference" "U3" (at 340.36 41.91 0) (effects (font (size 1.27 1.27))))
     (property "Value" "LD1117V33" (at 340.36 52.07 0) (effects (font (size 1.27 1.27))))
-    (property "Footprint" "UzeTang-Board:TO-220-3_Vertical" (at 340.36 45.72 0) (effects (font (size 1.27 1.27)) hide))
+    (property "Footprint" "UzeTang-Board:TO-220-3_Horizontal_TabDown" (at 340.36 45.72 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 340.36 45.72 0) (effects (font (size 1.27 1.27)) hide))
     (pin "3" (uuid 9280860f-b00b-5853-90ee-970f7a6c4c20))
     (pin "2" (uuid 63de3bf5-1d09-568e-a36c-48e01b7b992b))

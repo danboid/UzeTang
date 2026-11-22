@@ -12,6 +12,6 @@ for try in 1 2 3 4 5 6; do
   python3 gen/make_pcb.py finish
   out=$(python3 gen/drc.py UzeTang-Board.kicad_pcb)
   echo "try $try: $(echo "$out" | tail -1)"
-  echo "$out" | grep -q "unconnected" || break
+  echo "$out" | tail -1 | grep -q "unconnected" || break
 done
 python3 gen/make_sch.py

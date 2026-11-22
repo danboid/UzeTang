@@ -81,8 +81,13 @@ the bare Tang Nano 20K, so the bitstreams need a board constraint file:
    the back edge.
 4. The SNES sockets solder to pads on the front edge, as on the Uzebox.
 5. ESP-12F (optional): solder the 2 mm male headers to the module, and the two
-   2 mm receptacles, the LD1117V33, C6-C9, R10-R13 and J4 to the board. Fit the
-   J4 jumper to boot the ESP-12F into flash mode.
+   2 mm receptacles, C6-C9, R10-R13 and J4 to the board. Fit the J4 jumper to
+   boot the ESP-12F into flash mode.
+6. The LD1117V33 (U3) lies flat, tab down, with its body towards the back of
+   the board: bend its legs down 90° so the hole in the tab lines up with the
+   hole in the board, then solder it. An M3 screw and nut through the tab is
+   optional. There is no top-side copper under the tab, which is connected to
+   the 3.3 V output.
 
 ### Fitting the case
 

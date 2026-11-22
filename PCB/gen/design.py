@@ -95,8 +95,10 @@ PARTS = [
     dict(ref="U2", value="ESP-12F", fp=f"{LIB}:ESP-12F_Socket_2mm", x=87.0, y=30.5, rot=-90,
          pads=ESP_PADS, sym="ESP12", dk="1528-1438-ND", optional=True,
          note="Removable ESP-12F (Uzenet) on 2x 8-pin 2.0 mm receptacles, as on the Uzebox"),
-    dict(ref="U3", value="LD1117V33", fp=f"{LIB}:TO-220-3_Vertical",
-         x=61.5, y=40.0, rot=0, pads={"1": "GND", "2": "+3V3_ESP", "3": "+5V"},
+    # Lies flat, tab down, with its body towards the back of the board.
+    # The M3 hole in the tab can take a screw; there is no copper under the tab.
+    dict(ref="U3", value="LD1117V33", fp=f"{LIB}:TO-220-3_Horizontal_TabDown",
+         x=60.1, y=37.0, rot=0, pads={"1": "GND", "2": "+3V3_ESP", "3": "+5V"},
          sym="LDO", dk="497-1491-5-ND", optional=True,
          note="3.3 V for the ESP-12F (its current peaks are too much for the Tang's 3.3 V)"),
     dict(ref="J4", value="ESP FLASH", fp=f"{LIB}:PinHeader_1x02_P2.54mm_Vertical",
@@ -123,8 +125,8 @@ PARTS = [
     C("C3", "10u", "+3V3", "GND", 78.0, 45.5, 0, CP5_FP, DK_10U, sym="CP", note="SD card supply"),
     C("C4", "100n", "+3V3", "GND", 85.0, 45.5, 0, C_FP, DK_100N, note="SD card supply"),
     C("C5", "220u", "+5V", "GND", 9.0, 30.0, 0, CP63_FP, DK_220U, sym="CP", note="5 V bulk"),
-    C("C6", "10u", "+5V", "GND", 60.0, 47.0, 0, CP5_FP, DK_10U, sym="CP", note="LD1117 input"),
-    C("C7", "10u", "+3V3_ESP", "GND", 66.5, 47.0, 0, CP5_FP, DK_10U, sym="CP", note="LD1117 output"),
+    C("C6", "10u", "+5V", "GND", 58.9, 59.5, 0, CP5_FP, DK_10U, sym="CP", note="LD1117 input"),
+    C("C7", "10u", "+3V3_ESP", "GND", 63.8, 64.5, 0, CP5_FP, DK_10U, sym="CP", note="LD1117 output"),
     C("C8", "220u", "+3V3_ESP", "GND", 70.0, 30.0, 0, CP63_FP, DK_220U, sym="CP",
       note="ESP-12F bulk (transmit current peaks)"),
     C("C9", "100n", "+3V3_ESP", "GND", 70.0, 25.0, 0, C_FP, DK_100N, note="ESP-12F supply"),
@@ -149,6 +151,8 @@ POWER_NETS = ["GND", "+5V", "+3V3", "+3V3_ESP"]
 
 # no copper under the ESP-12F's PCB antenna (x1, y1, x2, y2, Uzebox coords)
 ESP_ANTENNA_KEEPOUT = (93.5, 22.0, 100.0, 39.0)
+# No top copper under U3's tab (the tab is VOUT and sits on the board)
+U3_TAB_KEEPOUT = (57.4, 40.0, 67.9, 56.9)
 
 
 def nets():
