@@ -4,7 +4,7 @@ A carrier PCB that turns a Sipeed **Tang Nano 20K** into a boxed console for
 [UzeTang](https://github.com/danboid/UzeTang) and SNESTang, in the
 [Uzebox 3D-printed case](https://github.com/Uzebox/uzebox/tree/master/cad/Enclosures/Uzebox/V2.0).
 
-![Board, both copper layers](docs/pcb-copper.png)
+![UzeTang board](UzeTang-PCB.png)
 
 - **Same outline and holes as the Uzebox V5.0 / Omega board:** 100 × 81 mm,
   M3 holes at (3, 3), (97, 3) and (55.14, 71.15), the two light-pipe holes and
