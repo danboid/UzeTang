@@ -28,7 +28,10 @@ add_file -type verilog "rtl/hdmi/audio_sample_packet.sv"
 add_file -type verilog "rtl/hdmi/auxiliary_video_information_info_frame.sv"
 add_file -type verilog "rtl/hdmi/source_product_description_info_frame.sv"
 add_file -type verilog "rtl/hdmi/serializer.sv"
-add_file -type cst "rtl/tang20k/uzetang.cst"
+# UZETANG_CST=uzetang_board.cst builds for the UzeTang Board
+set cst uzetang.cst
+if {[info exists ::env(UZETANG_CST)]} { set cst $::env(UZETANG_CST) }
+add_file -type cst "rtl/tang20k/$cst"
 add_file -type sdc "rtl/tang20k/uzetang.sdc"
 
 set_option -synthesis_tool gowinsynthesis

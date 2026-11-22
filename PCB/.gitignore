@@ -1,0 +1,11 @@
+# KiCad local files
+*.lck
+.history/
+*-backups/
+*.kicad_prl
+fp-info-cache
+# autorouter scratch files
+gen/*.dsn
+gen/*.ses
+gen/fr.log
+gen/__pycache__/

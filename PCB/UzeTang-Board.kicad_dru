@@ -1,8 +1,9 @@
 (version 1)
-# The SNES controller sockets are soldered to pads that run to the front
-# edge of the board, exactly as on the Uzebox PCB.
+# The SNES controller sockets straddle the front edge: their pins solder to
+# pads that run right up to the edge, exactly as on the Uzebox PCB.
 (rule "SNES sockets at the board edge"
   (constraint edge_clearance (min 0mm))
+  (severity ignore)
   (condition "A.Reference == 'J1' || A.Reference == 'J2'"))
 
 (rule "single spoke ok (other layer also pours GND)"

@@ -32,7 +32,7 @@ front-left corner, y towards the back.
 
 | File | What it is |
 |---|---|
-| `UzeTang-Board.kicad_pro` / `.kicad_pcb` / `.kicad_sch` | KiCad 7 project (opens in KiCad 7 or 8) |
+| `UzeTang-Board.kicad_pro` / `.kicad_pcb` / `.kicad_sch` | KiCad 7 project (opens in KiCad 7 and later) |
 | `UzeTang-Board.pretty/`, `UzeTang-Board.kicad_sym` | Project footprint and symbol libraries (referenced by `fp-lib-table` / `sym-lib-table`) |
 | `UzeTang-Board.kicad_dru` | Custom design rules (see *DRC* below) |
 | `bom/UzeTang-Board-BOM-DigiKey.xlsx` | Digi-Key BOM; set the number of boards in F3 |
@@ -62,11 +62,10 @@ own micro SD slot. All other free header pins are unused.
 The SNES pads need no changes. The buttons and SD card use different pins from
 the bare Tang Nano 20K, so the bitstreams need a board constraint file:
 
-- **UzeTang:** `uzetang-board-cst.patch` (supplied alongside this project)
-  adds `rtl/tang20k/uzetang_board.cst` to the UzeTang repository. Build with
-  `CST=uzetang_board.cst syn/oss_build.sh` (open-source tools) or
-  `UZETANG_CST=uzetang_board.cst gw_sh build.tcl` (Gowin). The default build is
-  unchanged, so the same tree still builds for a bare Tang Nano 20K.
+- **UzeTang:** `rtl/tang20k/uzetang_board.cst` holds the board's pins. Build
+  with `CST=uzetang_board.cst syn/oss_build.sh` (open-source tools) or
+  `UZETANG_CST=uzetang_board.cst gw_sh build.tcl` (Gowin). The default build
+  still targets a bare Tang Nano 20K.
 - **SNESTang:** in `nano20k.cst`, move the two buttons to 71 / 72 and the SD
   lines to the pins in the table above. Both stay active high, as on the
   Tang's own buttons.
@@ -108,9 +107,9 @@ Run DRC in KiCad's PCB editor. Expected results:
 - No unconnected items and no clearance errors.
 - **Silkscreen warnings** where the back-side text crosses tracks: harmless.
 - The SNES socket pads reach the front edge, exactly as on the Uzebox board.
-  `UzeTang-Board.kicad_dru` gives J1 and J2 zero edge clearance, so KiCad's
-  editor accepts them. (KiCad's Python DRC does not apply that rule, so
-  `gen/drc.py` still lists those 14 pads under `copper_edge_clearance`.)
+  A rule in `UzeTang-Board.kicad_dru` sets the edge-clearance check to
+  *ignore* for J1 and J2, which KiCad 10 honours. The KiCad 7 Python DRC in
+  `gen/drc.py` still lists those 14 pads.
 
 ## Regenerating
 

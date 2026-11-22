@@ -5,6 +5,8 @@
 # and 48 kHz audio). The HDMI pins use true LVDS buffers (TLVDS_OBUF), as
 # apicula does not allow emulated LVDS on them.
 set -e
+# CST=uzetang_board.cst syn/oss_build.sh builds for the UzeTang Board
+# (board buttons and SD socket); the default is the bare Tang Nano 20K.
 HERE=$(cd "$(dirname "$0")" && pwd)
 R=$HERE/../rtl
 OUT=$HERE/out
@@ -18,7 +20,7 @@ yosys -q -l "$OUT/yosys.log" -p "
   synth_gowin -top uzetang_top -json $OUT/uzetang.json"
 # nextpnr wants both pins of a differential pair constrained separately
 sed -E 's/IO_LOC "([a-z_]+)_p(\[[0-9]\])?" ([0-9]+),([0-9]+);/IO_LOC "\1_p\2" \3;\nIO_LOC "\1_n\2" \4;/' \
-    "$R/tang20k/uzetang.cst" > "$OUT/uzetang_oss.cst"
+    "$R/tang20k/${CST:-uzetang.cst}" > "$OUT/uzetang_oss.cst"
 $NEXTPNR --json "$OUT/uzetang.json" --write "$OUT/uzetang_pnr.json" \
     --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C \
     --vopt cst="$OUT/uzetang_oss.cst" --freq 28.7 --threads 2 \
