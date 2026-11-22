@@ -1,7 +1,7 @@
 # UzeTang
 
 A [Uzebox](https://uzebox.org) console core for the **Sipeed Tang Nano 20K**
-FPGA, based on the Uzebox Omega design.
+FPGA, based on the [Uzebox Omega](https://github.com/danboid/uzebox-omega) design.
 
 - **CPU:** a new, cycle-exact ATmega644 core. It is verified in lock-step,
   cycle by cycle, against the
@@ -21,9 +21,8 @@ Not included yet: the ESP8266 / Uzenet, DualShock 2 adapters (their pins are
 kept free), EEPROM saving across power cycles, and SNES mouse or keyboard
 support.
 
-> **Status:** everything has been verified in simulation, and the open-source
-> flow places, routes and meets timing. **Nothing has been tested on a real
-> board yet.** Please report what you see.
+I don't plan to port it to any other Tang boards but I would like to see it ported
+to the Spectrum Next, MEGA65 and other open source modern retro FPGA based computers.
 
 ## Hardware
 
