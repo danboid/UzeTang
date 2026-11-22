@@ -101,6 +101,9 @@ powered on. Add `-b tangnano20k` if openFPGALoader does not detect the board
 on its own. Without `-f`, the bitstream is only loaded into the FPGA and is
 lost at power-off, which is handy for a quick test.
 
+Alternatively you can try flashing uzetang-oss.fs which is the same code
+synthesized into a bitstream using an open source toolchain.
+
 ## Building
 
 ### Installing the Gowin IDE
