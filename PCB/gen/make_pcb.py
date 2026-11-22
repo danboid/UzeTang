@@ -92,6 +92,9 @@ def place():
         x, y = D.to_kicad(p["x"], p["y"])
         fp.SetPosition(vec(x, y))
         fp.SetOrientationDegrees(p.get("rot", 0))
+        if p["ref"] in ("J1", "J2", "SW1", "SW2"):
+            # the SNES P1/P2 and RESET/USER labels say what these are
+            fp.Reference().SetVisible(False)
         board.Add(fp)
         for pad in fp.Pads():
             name = pad.GetName()
@@ -113,10 +116,10 @@ def place():
     T("SD CARD", 83.0, 77.0, 1.2)
     T("HDMI ^ back of case", 30.0, 79.6, 1.0)
     T("UzeTang Board v1.0", 51.0, 77.0, 1.3)
-    T("UzeTang Board v1.0", 50.0, 40.0, 1.5, 0, pcbnew.B_SilkS)
-    T("Tang Nano 20K carrier - UzeTang / SNESTang", 50.0, 37.5, 1.0, 0, pcbnew.B_SilkS)
-    T("Fits the Uzebox 3D-printed case", 50.0, 35.5, 1.0, 0, pcbnew.B_SilkS)
-    T("CERN-OHL-S-2.0", 50.0, 33.5, 1.0, 0, pcbnew.B_SilkS)
+    T("UzeTang Board v1.0", 63.0, 66.0, 1.5, 0, pcbnew.B_SilkS)
+    T("Tang Nano 20K carrier - UzeTang / SNESTang", 63.0, 63.5, 1.0, 0, pcbnew.B_SilkS)
+    T("Fits the Uzebox 3D-printed case", 63.0, 61.5, 1.0, 0, pcbnew.B_SilkS)
+    T("CERN-OHL-S-2.0", 63.0, 59.5, 1.0, 0, pcbnew.B_SilkS)
 
     # copper keep-out under the ESP-12F's PCB antenna (both layers)
     ka = D.ESP_ANTENNA_KEEPOUT

@@ -104,8 +104,7 @@ about 22 mm of headroom above the PCB, enough for the Tang on 8.5 mm headers.
 
 Run DRC in KiCad's PCB editor. Expected results:
 
-- No unconnected items and no clearance errors.
-- **Silkscreen warnings** where the back-side text crosses tracks: harmless.
+- No violations at all in KiCad 10.
 - The SNES socket pads reach the front edge, exactly as on the Uzebox board.
   A rule in `UzeTang-Board.kicad_dru` sets the edge-clearance check to
   *ignore* for J1 and J2, which KiCad 10 honours. The KiCad 7 Python DRC in

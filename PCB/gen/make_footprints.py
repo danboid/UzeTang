@@ -14,8 +14,16 @@ import re, sys, os
 OMEGA = sys.argv[1]
 OUT = sys.argv[2]
 
+def led_inner_ring_to_fab(s):
+    # The LED's inner 3 mm silk ring crosses its own pads; keep it on F.Fab only
+    return re.sub(r'(\(fp_arc \(start [^()]*\) \(mid [^()]*\) \(end [^()]*\) \(stroke \(width 0\.1524\) \(type solid\)\) \(layer )"F\.SilkS"',
+                  r'\1"F.Fab"', s)
+
+
 def convert(name):
     s = open(os.path.join(OMEGA, name + ".kicad_mod")).read()
+    if name == "LED3MM":
+        s = led_inner_ring_to_fab(s)
     s = re.sub(r'\(version \d+\)', '(version 20221018)', s)
     s = re.sub(r'\(generator "[^"]*"\)', '(generator pcbnew)', s)
     # KiCad 8 'property' fields -> KiCad 7 fp_text
@@ -87,11 +95,12 @@ open(os.path.join(OUT, "Hole_2.2mm_LightPipe.kicad_mod"), "w").write('''(footpri
 ''')
 open(os.path.join(OUT, "Bumpon.kicad_mod"), "w").write('''(footprint "Bumpon" (version 20221018) (generator pcbnew)
   (layer "F.Cu")
-  (descr "Rubber bumper position (Digikey SJ5303-7-ND), silkscreen only, bottom side")
+  (descr "Rubber bumper position (Digikey SJ5303-7-ND): small silk circle at the centre (two sit next to mounting holes), outline on B.Fab")
   (attr exclude_from_pos_files)
   (fp_text reference "REF**" (at 0 -6.5) (layer "B.SilkS") hide (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
   (fp_text value "Bumpon" (at 0 6.5) (layer "B.Fab") (effects (font (size 1 1) (thickness 0.15)) (justify mirror)))
-  (fp_circle (center 0 0) (end 5.6 0) (stroke (width 0.15) (type solid)) (fill none) (layer "B.SilkS"))
+  (fp_circle (center 0 0) (end 5.6 0) (stroke (width 0.15) (type solid)) (fill none) (layer "B.Fab"))
+  (fp_circle (center 0 0) (end 0.3 0) (stroke (width 0.1) (type solid)) (fill none) (layer "B.SilkS"))
 )
 ''')
 print("footprints written")
