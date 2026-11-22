@@ -1,0 +1,2 @@
+517e21413d90affef34584c535e366be85a6b4cb Tue Nov 10 10:53:37 2026 -0800
+Upstream: https://github.com/hdl-util/hdmi (MIT OR Apache-2.0). serializer.sv replaced with a Gowin OSER10 version.

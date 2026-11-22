@@ -1,0 +1,1019 @@
+/*
+ *  Emulation frame renderer
+ *
+ *  Copyright (C) 2016
+ *    Sandor Zsuga (Jubatian)
+ *  Uzem (the base of CUzeBox) is copyright (C)
+ *    David Etherton,
+ *    Eric Anderton,
+ *    Alec Bourque (Uze),
+ *    Filipe Rinaldi,
+ *    Sandor Zsuga (Jubatian),
+ *    Matt Pandina (Artcfox)
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+
+#include "frame.h"
+#include "guicore.h"
+#include "filters.h"
+#include "textgui.h"
+#include "renderpath.h"
+#include "cu_esp.h"
+#include "cu_ufile.h"
+#ifdef ENABLE_VCAP
+#include "avconv.h"
+#include "mainui.h"
+#endif
+
+
+
+/* Maximal number of rows to process in a frame */
+#define MAX_ROWS     268U
+
+/* Start sync pulse of picture output */
+#define RPULSE_START  19U
+
+/* Number of sync pulses to render */
+#define RPULSE_NO    225U
+
+/* Target width of the displayed game image within the GUI buffer */
+#define ROW_PIXELS             624U
+
+/* Explicit active video extraction window in Uzebox CPU cycles */
+#define ROW_ACTIVE_CYCLES      1440U
+#define ROW_BEGINCY            299U
+
+/* Original CUzeBox filtered extraction path (7 source cycles -> 3 output px) */
+#define CLASSIC_ROW_BEGINCY    291U
+#define CLASSIC_PREVS_WIDTH    ((((ROW_PIXELS / 3U) * 7U)) + 2U)
+
+/* Prev. frame storage line width must cover the largest extraction mode */
+#define PREVS_WIDTH            CLASSIC_PREVS_WIDTH
+
+
+/* Previous frame storage (Uzebox cycles & palette) */
+static uint8  frame_prev[RPULSE_NO * PREVS_WIDTH];
+
+/* Collects audio data */
+static uint8  frame_audio[MAX_ROWS];
+
+/* Fade-out memory accesses */
+static uint8  frame_memf[4096U];
+
+/* Fade-out I/O accesses */
+static uint8  frame_iof[256U];
+
+/* Precomputed horizontal map for raw cycle-domain extraction */
+static auint  frame_raw_xmap[ROW_PIXELS];
+static boole  frame_raw_xmap_init = FALSE;
+
+/* Area-weighted map for the staged path: a target pixel covers
+** ROW_ACTIVE_CYCLES / ROW_PIXELS (2.31) cycles, so up to RAW_TAPS of them,
+** each weighted by the share of it covered (weights sum to 256). Nearest-
+** cycle sampling made a 3-cycle Uzebox pixel 1 or 2 target pixels wide
+** depending on its position: uneven strokes in 80-column text. */
+#define RAW_TAPS 4U
+static auint  frame_blend_x0[ROW_PIXELS];
+static auint  frame_blend_w[ROW_PIXELS][RAW_TAPS];
+static boole  frame_blend_init = FALSE;
+
+/* Frame counter to time memory access logic */
+static auint  frame_ctr = 0U;
+
+/* Last audio frame was zero? */
+static boole  frame_isauz = TRUE;
+#ifdef ENABLE_DEBUGGER
+static boole  frame_break_hit = FALSE;
+static auint  frame_break_addr = 0U;
+#endif
+
+/* Previous state of frame merging */
+static boole  frame_pmerge = FALSE;
+
+/* Three palette-index banks retain completed fields while a partial frame is
+** being rendered. About 950 KiB; collection is memcpy per visible scanline,
+** never an additional operation in the per-cycle CPU macros. */
+static uint8 frame_shot_rows[3][RPULSE_NO*ROW_ACTIVE_CYCLES];
+static uint8 frame_shot_seen[3][RPULSE_NO];
+static auint frame_shot_front[2]={0U,1U},frame_shot_work=2U;
+static boole frame_shot_valid[2],frame_shot_interlaced;
+
+void frame_capture_reset(void)
+{
+ memset(frame_shot_seen,0,sizeof(frame_shot_seen));
+ frame_shot_valid[0]=frame_shot_valid[1]=FALSE;
+ frame_shot_interlaced=FALSE;
+}
+
+static void frame_capture_row(cu_row_t const* row)
+{
+ auint y=row->pno-RPULSE_START;
+ if(y>=RPULSE_NO)return;
+ memcpy(frame_shot_rows[frame_shot_work]+y*ROW_ACTIVE_CYCLES,
+        row->pixels+ROW_BEGINCY,ROW_ACTIVE_CYCLES);
+ frame_shot_seen[frame_shot_work][y]=1U;
+}
+
+static void frame_capture_commit(boole interlaced,auint parity)
+{
+ auint old;
+ parity=interlaced?(parity&1U):0U;
+ if(interlaced!=frame_shot_interlaced)frame_shot_valid[0]=frame_shot_valid[1]=FALSE;
+ old=frame_shot_front[parity];frame_shot_front[parity]=frame_shot_work;frame_shot_work=old;
+ frame_shot_valid[parity]=TRUE;frame_shot_interlaced=interlaced;
+ if(!interlaced)frame_shot_valid[1]=FALSE;
+ memset(frame_shot_seen[frame_shot_work],0,RPULSE_NO);
+}
+
+void frame_capture_geometry(auint* first_row,auint* count,boole* valid,boole* interlaced)
+{
+ auint first=RPULSE_NO,last=0U,p,y;
+ for(p=0U;p<2U;p++)if(frame_shot_valid[p]){
+  auint bank=frame_shot_front[p];
+  for(y=0U;y<RPULSE_NO;y++)if(frame_shot_seen[bank][y]){
+   if(y<first)first=y;
+   if(y>last)last=y;
+  }
+ }
+ *valid=first!=RPULSE_NO;
+ if(!*valid){first=0U;last=RPULSE_NO-1U;}
+ *first_row=RPULSE_START+first;*count=last-first+1U;*interlaced=frame_shot_interlaced;
+}
+
+/* Box and linear filters operate on RGB channel values, before rotation. */
+static uint32 frame_shot_sample(uint8 const* src,auint x,auint w,auint sampling,
+                               uint32 const* pal,guicore_pixfmt_t const* fmt)
+{
+ auint shifts[3]={fmt->rsh,fmt->gsh,fmt->bsh},c;uint32 result=pal[0]&
+     ~((0xFFU<<fmt->rsh)|(0xFFU<<fmt->gsh)|(0xFFU<<fmt->bsh));
+ if(!src)return pal[0];
+ if(!sampling||w==ROW_ACTIVE_CYCLES)return pal[src[x*ROW_ACTIVE_CYCLES/w]];
+ for(c=0U;c<3U;c++){
+  auint sum=0U,den;
+  if(sampling==1U){
+   auint begin=x*ROW_ACTIVE_CYCLES,end=begin+ROW_ACTIVE_CYCLES,i=begin/w;
+   while(i*w<end){
+    auint lo=begin>i*w?begin:i*w,hi=end<(i+1U)*w?end:(i+1U)*w;
+    sum+=((pal[src[i]]>>shifts[c])&255U)*(hi-lo);i++;
+   }
+   den=ROW_ACTIVE_CYCLES;
+  }else{
+   int pos=(int)((2U*x+1U)*ROW_ACTIVE_CYCLES)-(int)w;
+   auint i,t;den=2U*w;
+   if(pos<0)pos=0;
+   if((auint)pos>(ROW_ACTIVE_CYCLES-1U)*den)pos=(int)((ROW_ACTIVE_CYCLES-1U)*den);
+   i=(auint)pos/den;t=(auint)pos%den;
+   sum=((pal[src[i]]>>shifts[c])&255U)*(den-t);
+   if(t)sum+=((pal[src[i+1U]]>>shifts[c])&255U)*t;
+  }
+  result|=((sum+den/2U)/den)<<shifts[c];
+ }
+ return result;
+}
+
+boole frame_capture_cycle_pixels_ex(uint32** pixels,auint* width,auint* height,auint w,auint y_scale,auint sampling)
+{
+ auint first,rows,x,y,h,flags=guicore_get_jamma(),rot=0U,previous=~0U;
+ boole valid,interlaced;uint32* out;uint32 row[2880];
+ uint32 const* pal=guicore_getpalette();guicore_pixfmt_t fmt;
+ if(!pixels||!width||!height)return FALSE;
+ *pixels=NULL;*width=*height=0U;
+ if(w<1U||w>2880U||y_scale<1U||y_scale>10U||sampling>2U)return FALSE;
+ frame_capture_geometry(&first,&rows,&valid,&interlaced);first-=RPULSE_START;
+ guicore_getpixfmt(&fmt);h=rows*y_scale;
+ if(flags&JAMMA_ROTATE_90)rot=1U;
+ else if(flags&JAMMA_ROTATE_180)rot=2U;
+ else if(flags&JAMMA_ROTATE_270)rot=3U;
+ *width=(rot&1U)?h:w;*height=(rot&1U)?w:h;
+ out=(uint32*)malloc((size_t)w*h*sizeof(*out));if(!out)return FALSE;
+ for(y=0U;y<h;y++){
+  /* Woven source rows are half a progressive scanline high. Nearest-neighbor
+  ** Y/2 scaling retains the same field aspect. */
+  auint line=(y*(interlaced?2U:1U))/y_scale,parity=interlaced?(line&1U):0U;
+  auint source=first+(interlaced?line/2U:line);
+  if(!frame_shot_valid[parity])parity^=1U;
+  auint bank=frame_shot_front[parity];
+  if(line!=previous){
+   uint8 const* src=(valid&&frame_shot_valid[parity]&&frame_shot_seen[bank][source])?
+       frame_shot_rows[bank]+source*ROW_ACTIVE_CYCLES:NULL;
+   for(x=0U;x<w;x++)row[x]=frame_shot_sample(src,x,w,sampling,pal,&fmt);
+   previous=line;
+  }
+  for(x=0U;x<w;x++){
+   auint dx=x,dy=y;
+   if(rot==1U){dx=h-1U-y;dy=x;}
+   else if(rot==2U){dx=w-1U-x;dy=h-1U-y;}
+   else if(rot==3U){dx=y;dy=w-1U-x;}
+   if(flags&JAMMA_FLIP_H)dx=*width-1U-dx;
+   if(flags&JAMMA_FLIP_V)dy=*height-1U-dy;
+   out[dy*(*width)+dx]=row[x];
+  }
+ }
+ *pixels=out;return TRUE;
+}
+
+boole frame_capture_cycle_pixels(uint32** pixels,auint* width,auint* height)
+{return frame_capture_cycle_pixels_ex(pixels,width,height,1440U,5U,0U);}
+
+void frame_invalidate_merge(void) { frame_pmerge = FALSE; guicore_reset_fields(); }
+
+
+/* Sync: Good signal marker */
+static const uint8 frame_syn_ok[5] = {0x00U, 0x00U, 0x80U, 0x00U, 0x00U};
+/* Sync: Invalid signal */
+static const uint8 frame_syn_in[5] = {0x7FU, 0x7FU, 0x7DU, 0x7FU, 0x7FU};
+/* Sync: Left 1 */
+static const uint8 frame_syn_l1[5] = {0x00U, 0x4FU, 0x4DU, 0x00U, 0x00U};
+/* Sync: Left 2 */
+static const uint8 frame_syn_l2[5] = {0x4FU, 0x4FU, 0x4DU, 0x00U, 0x00U};
+/* Sync: Left 2+ */
+static const uint8 frame_syn_l3[5] = {0x7FU, 0x4FU, 0x4DU, 0x00U, 0x00U};
+/* Sync: Right 1 */
+static const uint8 frame_syn_r1[5] = {0x00U, 0x00U, 0x4DU, 0x4FU, 0x00U};
+/* Sync: Right 2 */
+static const uint8 frame_syn_r2[5] = {0x00U, 0x00U, 0x4DU, 0x4FU, 0x4FU};
+/* Sync: Right 2+ */
+static const uint8 frame_syn_r3[5] = {0x00U, 0x00U, 0x4DU, 0x4FU, 0x7FU};
+/* Sync: Good line count (as VSync separator) */
+static const uint8 frame_syn_ng[5] = {0x80U, 0x80U, 0x80U, 0x80U, 0x80U};
+/* Sync: Bad line count (as VSync separator) */
+static const uint8 frame_syn_nf[5] = {0x4FU, 0x4FU, 0x4FU, 0x4FU, 0x4FU};
+
+
+
+/*
+** Clears a rectangular region to the given color
+*/
+static void frame_clear(uint32* pix, auint ptc,
+                        auint x, auint y, auint w, auint h, uint32 col)
+{
+ auint i;
+ auint j;
+ auint p;
+
+ for (j = 0U; j < h; j++){
+  p = ((y + j) * ptc) + x;
+  for (i = 0U; i < w; i++){
+   pix[p + i] = col;
+  }
+ }
+}
+
+
+static void frame_prepare_classic_palette(uint32* dst, uint32 const* src)
+{
+ guicore_pixfmt_t pixfmt;
+ auint i;
+ auint r;
+ auint g;
+ auint b;
+ uint32 col;
+
+ guicore_getpixfmt(&pixfmt);
+ for (i = 0U; i < 256U; ++i){
+  col = src[i];
+  r = ((col >> pixfmt.rsh) & 0xFFU) >> 4;
+  g = ((col >> pixfmt.gsh) & 0xFFU) >> 4;
+  b = ((col >> pixfmt.bsh) & 0xFFU) >> 4;
+  dst[i] = (r << pixfmt.rsh) | (g << pixfmt.gsh) | (b << pixfmt.bsh);
+ }
+}
+
+
+
+static void frame_init_raw_xmap(void)
+{
+ auint dp;
+ auint sp;
+ if (frame_raw_xmap_init){ return; }
+ for (dp = 0U; dp < ROW_PIXELS; dp ++){
+  sp = (((dp * ROW_ACTIVE_CYCLES) + (ROW_PIXELS >> 1)) / ROW_PIXELS);
+  if (sp >= ROW_ACTIVE_CYCLES){
+   sp = ROW_ACTIVE_CYCLES - 1U;
+  }
+  frame_raw_xmap[dp] = sp;
+ }
+ frame_raw_xmap_init = TRUE;
+}
+
+static void frame_init_blend_map(void)
+{
+ auint dp;
+ auint t;
+ auint beg;   /* Target pixel's span, in units of 1 / ROW_PIXELS cycle */
+ auint end;
+ auint c0;
+ auint lo;
+ auint hi;
+ auint sum;
+ if (frame_blend_init){ return; }
+ for (dp = 0U; dp < ROW_PIXELS; dp ++){
+  beg = dp * ROW_ACTIVE_CYCLES;
+  end = beg + ROW_ACTIVE_CYCLES;
+  c0  = beg / ROW_PIXELS;
+  frame_blend_x0[dp] = c0;
+  sum = 0U;
+  for (t = 0U; t < RAW_TAPS; t ++){
+   lo = (c0 + t) * ROW_PIXELS;
+   hi = lo + ROW_PIXELS;
+   if (lo < beg){ lo = beg; }
+   if (hi > end){ hi = end; }
+   frame_blend_w[dp][t] = (hi > lo) ?
+       ((((hi - lo) * 256U) + (ROW_ACTIVE_CYCLES >> 1)) / ROW_ACTIVE_CYCLES) : 0U;
+   sum += frame_blend_w[dp][t];
+  }
+  /* Rounding: the largest weight absorbs the difference, so sum is 256 */
+  for (t = 1U, lo = 0U; t < RAW_TAPS; t ++){
+   if (frame_blend_w[dp][t] > frame_blend_w[dp][lo]){ lo = t; }
+  }
+  frame_blend_w[dp][lo] = frame_blend_w[dp][lo] + 256U - sum;
+  /* Never read past the active window: a zero-weight tap stays in it */
+  for (t = 0U; t < RAW_TAPS; t ++){
+   if ((c0 + t) >= ROW_ACTIVE_CYCLES){ frame_blend_w[dp][t] = 0U; }
+  }
+ }
+ frame_blend_init = TRUE;
+}
+
+/* One target pixel from the cycles it covers. src is the first cycle of the
+** active window. Channels are blended in two 16-bit lanes each (weights sum
+** to 256, so 255 * 256 fits). */
+static uint32 frame_blend_px(uint8 const* src, auint dp, uint32 const* pal)
+{
+ auint  x0 = frame_blend_x0[dp];
+ auint  t;
+ auint  w;
+ uint32 c;
+ uint32 rb = 0U;
+ uint32 ga = 0U;
+ for (t = 0U; t < RAW_TAPS; t ++){
+  w = frame_blend_w[dp][t];
+  if (w == 0U){ continue; }
+  c = pal[src[x0 + t]];
+  rb += ( c        & 0x00FF00FFU) * w;
+  ga += ((c >> 8U) & 0x00FF00FFU) * w;
+ }
+ return ((rb >> 8U) & 0x00FF00FFU) | (ga & 0xFF00FF00U);
+}
+
+static auint frame_get_render_path(void)
+{
+ auint mode = guicore_get_render_path();
+ if (mode > RENDER_PATH_STAGED){
+  mode = RENDER_PATH_STAGED;
+ }
+ return mode;
+}
+
+static boole frame_use_classic_render(void)
+{
+ return RENDER_PATH_IS_CLASSIC(frame_get_render_path());
+}
+
+static boole frame_area_weighted;
+void frame_set_area_weighted(boole enabled)
+{
+ if (frame_area_weighted == enabled) return;
+ frame_area_weighted = enabled;
+ frame_invalidate_merge();
+}
+
+/* Area sampling is optional; Potato retains nearest-cycle sampling. */
+static boole frame_use_blend(void)
+{
+ return frame_area_weighted && RENDER_PATH_IS_STAGED(frame_get_render_path());
+}
+
+/*
+** Renders a line from the active video window in the cycle domain: in the
+** staged path each target pixel blends the cycles it covers, by area; in
+** Potato it takes the nearest cycle.
+** dest is the target line to fill; len is in target pixels.
+*/
+static void frame_line32_raw(uint32* dest,
+                             uint8 const* src, auint off, auint len,
+                             uint32 const* pal)
+{
+ auint dp;
+ auint sp;
+
+ if (frame_use_blend()){
+  frame_init_blend_map();
+  for (dp = 0U; dp < len; dp ++){
+   dest[dp] = frame_blend_px(src + off, dp, pal);
+  }
+  return;
+ }
+ frame_init_raw_xmap();
+ for (dp = 0U; dp < len; dp ++){
+  sp = off + frame_raw_xmap[dp];
+  dest[dp] = pal[src[sp]];
+ }
+}
+
+static void frame_line32_classic(uint32* dest,
+                                 uint8 const* src, auint off, auint len,
+                                 uint32 const* pal)
+{
+ auint  sp = off;
+ auint  dp;
+ auint  px;
+ auint  t0, t1, t2, t3, t4;
+
+ t0 = pal[src[sp - 1U]];
+ t1 = pal[src[sp + 0U]];
+ for (dp = 0U; dp < ((len / 3U) * 3U); dp += 3U)
+ {
+  t2 = pal[src[sp + 1U]];
+  t3 = pal[src[sp + 2U]];
+  t4 = pal[src[sp + 3U]];
+  px = (t0 * 4U) + (t1 * 4U) + (t2 * 4U) + (t3 * 4U) + (t4 * 1U);
+  dest [dp + 0U] = px;
+  t0 = pal[src[sp + 4U]];
+  t1 = pal[src[sp + 5U]];
+  px = (t2 * 2U) + (t3 * 4U) + (t4 * 5U) + (t0 * 4U) + (t1 * 2U);
+  dest [dp + 1U] = px;
+  t2 = pal[src[sp + 6U]];
+  t3 = pal[src[sp + 7U]];
+  px = (t4 * 1U) + (t0 * 4U) + (t1 * 4U) + (t2 * 4U) + (t3 * 4U);
+  dest [dp + 2U] = px;
+  sp += 7U;
+  t0 = t2;
+  t1 = t3;
+ }
+}
+
+
+
+/*
+** Renders a line by explicitly sampling the active video window in the cycle
+** domain while merging the previous frame at the same cycle positions.
+** dest is the target line to fill; len is in target pixels.
+*/
+static void frame_line32_copy_raw(uint32* dest,
+                                  uint8* dsu,
+                                  uint8 const* src, auint off, auint len,
+                                  uint32 const* pal)
+{
+ auint  dp;
+ auint  sp;
+ uint32 c0;
+ uint32 c1;
+
+ if (frame_use_blend()){
+  frame_init_blend_map();
+  for (dp = 0U; dp < len; dp ++){
+   c0 = frame_blend_px(src + off, dp, pal);
+   c1 = frame_blend_px(dsu, dp, pal);
+   dest[dp] = (((c0 & 0xFEFEFEFEU) >> 1) +
+               ((c1 & 0xFEFEFEFEU) >> 1));
+  }
+  memcpy(dsu, src + off, ROW_ACTIVE_CYCLES);
+  return;
+ }
+ frame_init_raw_xmap();
+ for (dp = 0U; dp < len; dp ++){
+  sp = frame_raw_xmap[dp];
+  c0 = pal[src[off + sp]];
+  c1 = pal[dsu[sp]];
+  dest[dp] = (((c0 & 0xFEFEFEFEU) >> 1) +
+              ((c1 & 0xFEFEFEFEU) >> 1));
+ }
+ memcpy(dsu, src + off, ROW_ACTIVE_CYCLES);
+}
+
+static void frame_line32_copy_classic(uint32* dest,
+                                      uint8* dsu,
+                                      uint8 const* src, auint off, auint len,
+                                      uint32 const* pal)
+{
+ auint  sp = off;
+ auint  up = 1U;
+ auint  dp;
+ auint  px;
+ auint  t0, t1, t2, t3, t4;
+ auint  u0, u1, u2, u3, u4;
+
+ t0 = pal[src[sp - 1U]];
+ u0 = pal[dsu[up - 1U]];
+ t1 = pal[src[sp + 0U]];
+ u1 = pal[dsu[up + 0U]];
+ dsu  [up - 1U] = src[sp - 1U];
+ dsu  [up + 0U] = src[sp + 0U];
+ for (dp = 0U; dp < ((len / 3U) * 3U); dp += 3U)
+ {
+  t2 = pal[src[sp + 1U]];
+  u2 = pal[dsu[up + 1U]];
+  t3 = pal[src[sp + 2U]];
+  u3 = pal[dsu[up + 2U]];
+  t4 = pal[src[sp + 3U]];
+  u4 = pal[dsu[up + 3U]];
+  px = (t0 * 2U) + (t1 * 2U) + (t2 * 2U) + (t3 * 2U) + (t4 * 1U) +
+       (u0 * 2U) + (u1 * 2U) + (u2 * 2U) + (u3 * 2U) + (u4 * 0U);
+  dest [dp + 0U] = px;
+  dsu  [up + 1U] = src[sp + 1U];
+  dsu  [up + 2U] = src[sp + 2U];
+  dsu  [up + 3U] = src[sp + 3U];
+  t0 = pal[src[sp + 4U]];
+  u0 = pal[dsu[up + 4U]];
+  t1 = pal[src[sp + 5U]];
+  u1 = pal[dsu[up + 5U]];
+  px = (t2 * 1U) + (t3 * 2U) + (t4 * 2U) + (t0 * 2U) + (t1 * 1U) +
+       (u2 * 1U) + (u3 * 2U) + (u4 * 3U) + (u0 * 2U) + (u1 * 1U);
+  dest [dp + 1U] = px;
+  dsu  [up + 4U] = src[sp + 4U];
+  dsu  [up + 5U] = src[sp + 5U];
+  t2 = pal[src[sp + 6U]];
+  u2 = pal[dsu[up + 6U]];
+  t3 = pal[src[sp + 7U]];
+  u3 = pal[dsu[up + 7U]];
+  px = (t4 * 1U) + (t0 * 2U) + (t1 * 2U) + (t2 * 2U) + (t3 * 2U) +
+       (u4 * 0U) + (u0 * 2U) + (u1 * 2U) + (u2 * 2U) + (u3 * 2U);
+  dest [dp + 2U] = px;
+  dsu  [up + 6U] = src[sp + 6U];
+  dsu  [up + 7U] = src[sp + 7U];
+  sp += 7U;
+  up += 7U;
+  t0 = t2;
+  u0 = u2;
+  t1 = t3;
+  u1 = u3;
+ }
+}
+
+
+
+/*
+** Copies lines of the Uzebox source to the previous frame storage. Should be
+** used in dropped frames to keep frame merging operational.
+*/
+static void frame_line_dropcopy_raw(uint8* dsu,
+                                    uint8 const* src, auint off, auint len)
+{
+ (void)len;
+ memcpy(dsu, src + off, ROW_ACTIVE_CYCLES);
+}
+
+static void frame_line_dropcopy_classic(uint8* dsu,
+                                        uint8 const* src, auint off, auint len)
+{
+ auint  sp = off;
+ auint  up = 1U;
+ auint  dp;
+
+ dsu  [up - 1U] = src[sp - 1U];
+ dsu  [up + 0U] = src[sp + 0U];
+ for (dp = 0U; dp < ((len / 3U) * 3U); dp += 3U)
+ {
+  dsu  [up + 1U] = src[sp + 1U];
+  dsu  [up + 2U] = src[sp + 2U];
+  dsu  [up + 3U] = src[sp + 3U];
+  dsu  [up + 4U] = src[sp + 4U];
+  dsu  [up + 5U] = src[sp + 5U];
+  dsu  [up + 6U] = src[sp + 6U];
+  dsu  [up + 7U] = src[sp + 7U];
+  sp += 7U;
+  up += 7U;
+ }
+}
+
+
+
+/*
+** Plots a pixel box for the frameinfo display. Uses the Uzebox palette.
+*/
+static void frame_pixbox(uint32* pix, auint ptc,
+                         auint x, auint y, uint8 col,
+                         uint32 const* pal)
+{
+ auint  pos = (x << 1) + (y * ptc);
+ uint32 c32 = ((pal[col] & 0xF8F8F8F8U) >> 3) * 6U;
+
+ pix[pos + 0U] = c32;
+ pix[pos + 1U] = c32;
+}
+
+
+
+/*
+** Plots a sync signal notification (5 pixel boxes wide)
+*/
+static void frame_pixsyn(uint32* pix, auint ptc,
+                         auint x, auint y, uint8 const* col,
+                         uint32 const* pal)
+{
+ auint i;
+ for (i = 0U; i < 5U; i++){
+  frame_pixbox(pix, ptc, x + i, y, col[i], pal);
+ }
+}
+
+
+
+/*
+** Plots a sync signal notification by the report
+*/
+static void frame_synrep(uint32* pix, auint ptc,
+                         auint x, auint y, auint rep,
+                         uint32 const* pal)
+{
+ if       (rep == 0U){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_ok, pal);
+ }else if (rep == CU_NOSYNC){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_in, pal);
+ }else if ((asint)(rep) == -1){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_l1, pal);
+ }else if ((asint)(rep) == -2){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_l2, pal);
+ }else if ((asint)(rep) <  -2){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_l3, pal);
+ }else if ((asint)(rep) ==  1){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_r1, pal);
+ }else if ((asint)(rep) ==  2){
+  frame_pixsyn(pix, ptc, x, y, frame_syn_r2, pal);
+ }else{
+  frame_pixsyn(pix, ptc, x, y, frame_syn_r3, pal);
+ }
+}
+
+
+
+
+/*
+** Attempts to run a frame of emulation (262 display rows ending with a
+** CU_GET_FRAME result). If no proper sync was generated, it still attempts
+** to get about a frame worth of lines. If drop is TRUE, the render of the
+** frame is dropped which can be used to help slow targets. If merge is TRUE,
+** frames following each other are averaged (weak motion blur, cancels out
+** flickers). Returns the number of rows generated, which is also the number
+** of samples within the audio buffer (normally 262).
+*/
+auint frame_run(boole drop, boole merge)
+{
+ /* Keep host endpoint queues moving independently of AVR UART polling. */
+ cu_esp_endpoint_host_tick();
+ auint           ret;
+ uint32 const*   pal = guicore_getpalette();
+ uint32          pal_classic[256];
+ uint32*         pix = guicore_getpixbuf();
+ auint           ptc = guicore_getpitch();
+ auint           row;
+ uint8*          mem;
+ auint           i;
+ auint           j;
+ auint           k;
+ auint           adr;
+ auint           col;
+ boole           gonly = ((guicore_getflags() & GUICORE_GAMEONLY) != 0U);
+ boole           use_classic = frame_use_classic_render();
+ int             tv_offset;
+ auint           field_parity;
+ boole           field_complete = FALSE;
+ cu_row_t const* erowd;
+ cu_frameinfo_t const* finfo;
+
+ if (!cu_avr_interlace_field(NULL)) guicore_reset_fields();
+ if (cu_avr_interlace_enabled()){
+  drop = FALSE;
+  merge = FALSE; /* Weave fields, never blend two opposite-parity fields. */
+ }
+
+ if (use_classic){
+  frame_prepare_classic_palette(pal_classic, pal);
+ }
+
+ /* Clear buffer. Maybe later will implement some more optimal solution here
+ ** to avoid this full clear, but it is not known which lines the emulator
+ ** would produce. */
+
+ if (!drop){
+  if (!gonly){
+   frame_clear(pix, ptc,  0U,  0U, 640U, 280U, pal[0]);
+  }else{
+   frame_clear(pix, ptc, 10U, 18U, 620U, 230U, pal[0]);
+  }
+ }
+
+ /* Shift whole display a little down to give more clearance to the text info
+ ** on the top */
+
+ pix = pix + (1U * ptc);
+
+ /* Build the frame */
+
+#ifdef ENABLE_DEBUGGER
+ frame_break_hit = FALSE;
+ frame_break_addr = 0U;
+#endif
+ row = 0U;
+
+ while (row < MAX_ROWS){
+
+  ret = cu_avr_run();
+
+#ifdef ENABLE_DEBUGGER
+  if ((ret & CU_BREAK) != 0U){
+   frame_break_hit = TRUE;
+   frame_break_addr = cu_avr_get_state()->pc & 0x7FFFU;
+   break;
+  }
+#endif
+
+  if ((ret & CU_GET_ROW) != 0U){
+
+   erowd = cu_avr_get_row();
+   frame_capture_row(erowd);
+   tv_offset = cu_avr_get_tv_sync_offset();
+   frame_audio[row] = (uint8)(erowd->sample);
+   if ( ((erowd->pno) >=  (RPULSE_START            )) &&
+        ((erowd->pno) <   (RPULSE_START + RPULSE_NO)) ){
+
+    if (!merge){
+
+     if (!drop){
+      if (use_classic){
+       frame_line32_classic(
+           pix + (((erowd->pno) * ptc) + 8U),
+           &(erowd->pixels[0]),
+           (auint)((int)CLASSIC_ROW_BEGINCY + tv_offset),
+           ROW_PIXELS,
+           pal_classic);
+      }else{
+       frame_line32_raw(
+           pix + (((erowd->pno) * ptc) + 8U),
+           &(erowd->pixels[0]),
+           (auint)((int)ROW_BEGINCY + tv_offset),
+           ROW_PIXELS,
+           pal);
+      }
+     }
+
+    }else{
+
+     if (!frame_pmerge){ /* Merging is just turned on: buffer uninitialized */
+
+      if (!drop){
+       if (use_classic){
+        frame_line32_classic(
+            pix + (((erowd->pno) * ptc) + 8U),
+            &(erowd->pixels[0]),
+            (auint)((int)CLASSIC_ROW_BEGINCY + tv_offset),
+            ROW_PIXELS,
+            pal_classic);
+       }else{
+        frame_line32_raw(
+            pix + (((erowd->pno) * ptc) + 8U),
+            &(erowd->pixels[0]),
+            (auint)((int)ROW_BEGINCY + tv_offset),
+            ROW_PIXELS,
+            pal);
+       }
+      }
+      if (use_classic){
+       frame_line_dropcopy_classic(
+           &(frame_prev[((erowd->pno) - RPULSE_START) * PREVS_WIDTH]),
+           &(erowd->pixels[0]),
+           (auint)((int)CLASSIC_ROW_BEGINCY + tv_offset),
+           ROW_PIXELS);
+      }else{
+       frame_line_dropcopy_raw(
+           &(frame_prev[((erowd->pno) - RPULSE_START) * PREVS_WIDTH]),
+           &(erowd->pixels[0]),
+           (auint)((int)ROW_BEGINCY + tv_offset),
+           ROW_PIXELS);
+      }
+
+     }else{              /* Previous frame buffer is present */
+
+      if (!drop){
+       if (use_classic){
+        frame_line32_copy_classic(
+            pix + (((erowd->pno) * ptc) + 8U),
+            &(frame_prev[((erowd->pno) - RPULSE_START) * PREVS_WIDTH]),
+            &(erowd->pixels[0]),
+            (auint)((int)CLASSIC_ROW_BEGINCY + tv_offset),
+            ROW_PIXELS,
+            pal_classic);
+       }else{
+        frame_line32_copy_raw(
+            pix + (((erowd->pno) * ptc) + 8U),
+            &(frame_prev[((erowd->pno) - RPULSE_START) * PREVS_WIDTH]),
+            &(erowd->pixels[0]),
+            (auint)((int)ROW_BEGINCY + tv_offset),
+            ROW_PIXELS,
+            pal);
+       }
+      }else{
+       if (use_classic){
+        frame_line_dropcopy_classic(
+            &(frame_prev[((erowd->pno) - RPULSE_START) * PREVS_WIDTH]),
+            &(erowd->pixels[0]),
+            (auint)((int)CLASSIC_ROW_BEGINCY + tv_offset),
+            ROW_PIXELS);
+       }else{
+        frame_line_dropcopy_raw(
+            &(frame_prev[((erowd->pno) - RPULSE_START) * PREVS_WIDTH]),
+            &(erowd->pixels[0]),
+            (auint)((int)ROW_BEGINCY + tv_offset),
+            ROW_PIXELS);
+       }
+      }
+
+     }
+
+    }
+
+   }
+   row ++;
+
+  }
+
+  if ((ret & CU_GET_FRAME) != 0U){ field_complete=TRUE; break; }
+
+ }
+
+ ret = row;
+ frame_pmerge = merge;
+
+ /* Manage the audio result */
+
+ /* If there was a sync error due to producing too few rows, pad the audio
+ ** buffer so it remains tolerable */
+
+ if (row != 0U){
+  i = frame_audio[row - 1U];
+ }else{
+  i = 0U;
+ }
+ while (row < MAX_ROWS){
+  frame_audio[row] = i;
+  row ++;
+ }
+
+ /* Check if the entire audio buffer is zero. If so, assume that the game
+ ** didn't produce any audio yet. */
+
+ i = 0U;
+ for (row = 0U; row < MAX_ROWS; row ++){
+  i += frame_audio[row];
+ }
+ if (i == 0U){ frame_isauz = TRUE; }
+
+ /* If no audio was produced, replace all 0x00U samples to 0x80U to prevent
+ ** audio distortion on the user's side (by applying that constant DC on the
+ ** output). */
+
+ if (frame_isauz){
+  for (row = 0U; row < MAX_ROWS; row ++){
+   if (frame_audio[row] != 0U){ break; } /* Audio output starts */
+   frame_audio[row] = 0x80U;
+  }
+ }
+ if (i != 0U){ frame_isauz = FALSE; } /* There was valid audio in the original contents */
+
+ /* Fill in other areas providing info (only if they are displayed) */
+
+ if (!gonly && !guicore_is_headless()){
+
+  /* Produce sync info sidebar */
+
+  if (!drop){
+   finfo = cu_avr_get_frameinfo();
+
+   for (row =   0U; row < 252U; row ++){ /* Display pulses */
+    frame_synrep(pix, ptc,   0U, row,      finfo->pulse[row].rise, pal);
+    frame_synrep(pix, ptc, 315U, row,      finfo->pulse[row].fall, pal);
+   }
+   if (finfo->rowcdif == 0U){            /* Row count separator */
+    frame_pixsyn(pix, ptc,   0U, 252U, frame_syn_ng, pal);
+    frame_pixsyn(pix, ptc, 315U, 252U, frame_syn_ng, pal);
+   }else{
+    frame_pixsyn(pix, ptc,   0U, 252U, frame_syn_nf, pal);
+    frame_pixsyn(pix, ptc, 315U, 252U, frame_syn_nf, pal);
+   }
+   for (row = 252U; row < 271U; row ++){ /* VSync pulses */
+    frame_synrep(pix, ptc,   0U, row + 1U, finfo->pulse[row].rise, pal);
+    frame_synrep(pix, ptc, 315U, row + 1U, finfo->pulse[row].fall, pal);
+   }
+  }
+
+  /* Produce memory access info blocks */
+
+  mem = cu_avr_get_meminfo();
+
+  for (k = 0U; k < 16U; k ++){
+   for (j = 0U; j < 16U; j ++){
+    for (i = 0U; i < 16U; i ++){
+     adr = (((k + 1U) & 0xFU) << 8) |
+           (j << 4) |
+           (i     );
+     if ((frame_ctr & 0x7U) == 0U){
+      if ((frame_memf[adr] & 0x07U) != 0U){ frame_memf[adr] -= 0x01U; }
+      if ((frame_memf[adr] & 0x38U) != 0U){ frame_memf[adr] -= 0x08U; }
+      if ((mem[adr]) & CU_MEM_R){ frame_memf[adr] |= 0x38U; }
+      if ((mem[adr]) & CU_MEM_W){ frame_memf[adr] |= 0x07U; }
+      mem[adr] = 0U; /* Clear cell's flags */
+     }
+     if (!drop){
+      col = 0x80U | frame_memf[adr];
+      frame_pixbox(pix, ptc, 36U + (k * 17U) + j, 248U + i, col, pal);
+     }
+    }
+   }
+  }
+
+  /* Produce I/O access info blocks */
+
+  mem = cu_avr_get_ioinfo();
+
+  for (j = 0U; j < 16U; j ++){
+   for (i = 0U; i < 16U; i ++){
+    adr = (j << 4) |
+          (i     );
+    if ((frame_ctr & 0x7U) == 0U){
+     if ((frame_iof[adr] & 0x07U) != 0U){ frame_iof[adr] -= 0x01U; }
+     if ((frame_iof[adr] & 0x38U) != 0U){ frame_iof[adr] -= 0x08U; }
+     if ((mem[adr]) & CU_MEM_R){ frame_iof[adr] |= 0x38U; }
+     if ((mem[adr]) & CU_MEM_W){ frame_iof[adr] |= 0x07U; }
+     mem[adr] = 0U; /* Clear cell's flags */
+    }
+    if (!drop){
+     col = 0x80U | frame_iof[adr];
+     frame_pixbox(pix, ptc, 12U + j, 248U + i, col, pal);
+    }
+   }
+  }
+
+ }
+
+ frame_ctr ++;
+
+ /* Add text GUI elements */
+
+#ifdef ENABLE_VCAP
+ if(!drop&&mainui_get_video_dump_active()){ avconv_stage_clean_frame(); }
+#endif
+ if (!guicore_is_headless()){ textgui_draw(drop || gonly, drop); }
+ if(!field_complete) guicore_reset_fields();
+ if(field_complete && !drop){
+  boole interlaced=cu_avr_interlace_field(&field_parity);
+  guicore_commit_field(interlaced, field_parity);
+ }
+ if(field_complete){
+  boole interlaced=cu_avr_interlace_field(&field_parity);
+  frame_capture_commit(interlaced,field_parity);
+ }else if(!frame_breakpoint_hit(FALSE,NULL)){
+  /* Like the on-screen renderer, retain bounded output from imperfect-sync
+  ** programs too. A debugger stop is different: keep its last complete image. */
+  if(ret)frame_capture_commit(FALSE,0U);
+  else memset(frame_shot_seen[frame_shot_work],0,RPULSE_NO);
+ }
+
+ return ret;
+}
+
+
+
+/*
+** Returns whether execution stopped due to a debugger breakpoint during the
+** last frame_run() call.
+*/
+boole frame_breakpoint_hit(boole clear, auint* out_word_addr)
+{
+#ifdef ENABLE_DEBUGGER
+ boole ret = frame_break_hit;
+ if (out_word_addr != NULL){ *out_word_addr = frame_break_addr; }
+ if (clear){
+  frame_break_hit = FALSE;
+  frame_break_addr = 0U;
+ }
+ return ret;
+#else
+ (void)clear;
+ if (out_word_addr != NULL){ *out_word_addr = 0U; }
+ return FALSE;
+#endif
+}
+
+
+/*
+** Returns the received unsigned audio samples of the frame (normally 262).
+*/
+uint8 const* frame_getaudio(void)
+{
+ return &(frame_audio[0]);
+}
