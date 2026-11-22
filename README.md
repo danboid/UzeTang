@@ -17,9 +17,11 @@ FPGA, based on the [Uzebox Omega](https://github.com/danboid/uzebox-omega) desig
   sequential modes; 24-bit addresses). The kernel's `SpiRamInitGetSize()`
   reports 128 banks of 64 KB, as CUzeBox-ex does with 8 MB.
 
-Not included yet: the ESP8266 / Uzenet, DualShock 2 adapters (their pins are
-kept free), EEPROM saving across power cycles, and SNES mouse or keyboard
-support.
+Not implemented yet: DualShock 2 adapters (their pins are kept free) and EEPROM saving
+across power cycles. There are likely other missing features.
+
+There is an experimental UzeTang PCB that fits within the Uzebox 3D printed case but
+it has not been tested at all yet so try it at your own risk.
 
 I don't plan to port it to any other Tang boards but I would like to see it ported
 to the Spectrum Next, MEGA65 and other open source modern retro FPGA based computers.
