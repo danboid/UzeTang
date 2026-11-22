@@ -8,7 +8,8 @@ A carrier PCB that turns a Sipeed **Tang Nano 20K** into a boxed console for
 
 - **Same outline and holes as the Uzebox V5.0 / Omega board:** 100 × 81 mm,
   M3 holes at (3, 3), (97, 3) and (55.14, 71.15), the two light-pipe holes and
-  the four rubber-foot positions.
+  the four rubber-foot positions. The corners are rounded to a 3 mm radius,
+  centred on the front mounting holes.
 - **Same front panel:** both SNES sockets, the RESET and USER buttons and the
   power LED sit exactly where the Uzebox has them, so the case's button caps
   and light pipe line up.
@@ -20,8 +21,8 @@ A carrier PCB that turns a Sipeed **Tang Nano 20K** into a boxed console for
   2 mm). Its USB-C faces the front, inside the case: use a short USB-C
   extension with a panel-mount end in the rear wall for power and flashing.
 - **Removable ESP-12F** (Uzenet) on two 8-pin 2 mm receptacles, as on the
-  Uzebox, with its own LD1117V33 regulator fed from the Tang's 5 V. The whole
-  ESP section is optional.
+  Uzebox, with its own LD1117V33 regulator fed from the Tang's 5 V and a
+  flash-mode jumper (J4, see below). The whole ESP section is optional.
 - Everything is through-hole except the SD socket (the same SMD socket the
   Uzebox uses). Two-layer board, GND poured on both sides.
 
@@ -70,6 +71,24 @@ the bare Tang Nano 20K, so the bitstreams need a board constraint file:
   lines to the pins in the table above. Both stay active high, as on the
   Tang's own buttons.
 
+## ESP-12F flash jumper (J4)
+
+J4, labelled ESP FLASH, is a 2-pin header that connects the ESP-12F's GPIO0 to
+GND. The ESP8266 checks GPIO0 when it starts up:
+
+- **J4 open (normal use):** R12 pulls GPIO0 high and the ESP-12F runs its
+  firmware.
+- **J4 fitted:** GPIO0 is held low and the ESP-12F starts in its serial
+  bootloader, ready to have new firmware written to it. Fit the jumper, then
+  reset the ESP-12F (power-cycle the board, or pulse ESP_RST from the FPGA).
+  Remove the jumper again afterwards.
+
+The ESP-12F's serial port is wired only to the FPGA (pins 48 and 49), so
+flashing it in place needs a bitstream that passes the Tang Nano 20K's USB
+serial port through to the ESP-12F. UzeTang doesn't do that yet. Until it
+does, the simplest way to update the ESP-12F is to unplug it from its sockets
+and flash it in an ESP-12 programming adapter. J4 can then stay open.
+
 ## Building one
 
 1. Order the PCB from the files in `gerbers/` (2 layers, 1.6 mm, any colour).
@@ -81,8 +100,8 @@ the bare Tang Nano 20K, so the bitstreams need a board constraint file:
    the back edge.
 4. The SNES sockets solder to pads on the front edge, as on the Uzebox.
 5. ESP-12F (optional): solder the 2 mm male headers to the module, and the two
-   2 mm receptacles, C6-C9, R10-R13 and J4 to the board. Fit the J4 jumper to
-   boot the ESP-12F into flash mode.
+   2 mm receptacles, C6-C9, R10-R13 and J4 to the board. Leave the J4 jumper
+   off for normal use (see *ESP-12F flash jumper* above).
 6. The LD1117V33 (U3) lies flat, tab down, with its body towards the back of
    the board: bend its legs down 90° so the hole in the tab lines up with the
    hole in the board, then solder it. An M3 screw and nut through the tab is

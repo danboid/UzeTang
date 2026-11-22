@@ -32,6 +32,42 @@ def load_fp(libname):
     return fp
 
 
+def add_arc(board, layer, start, mid, end, w=0.1):
+    s = pcbnew.PCB_SHAPE(board)
+    s.SetShape(pcbnew.SHAPE_T_ARC)
+    s.SetArcGeometry(vec(*start), vec(*mid), vec(*end))
+    s.SetLayer(layer); s.SetWidth(mm(w))
+    board.Add(s)
+
+
+def add_outline(board):
+    """Board outline with rounded corners (radius D.CORNER_R, in Uzebox mm)."""
+    W, H, r = D.BOARD_W, D.BOARD_H, D.CORNER_R
+    k = lambda x, y: D.to_kicad(x, y)
+    straight = [((r, 0), (W - r, 0)), ((W, r), (W, H - r)),
+                ((W - r, H), (r, H)), ((0, H - r), (0, r))]
+    for a, b in straight:
+        add_line(board, pcbnew.Edge_Cuts, *k(*a), *k(*b), 0.1)
+    c = r * (1 - 0.5 ** 0.5)          # mid-point of a 90 degree corner arc
+    corners = [((0, r), (c, c), (r, 0)), ((W - r, 0), (W - c, c), (W, r)),
+               ((W, H - r), (W - c, H - c), (W - r, H)), ((r, H), (c, H - c), (0, H - r))]
+    for a, m, b in corners:
+        add_arc(board, pcbnew.Edge_Cuts, k(*a), k(*m), k(*b))
+
+
+def reshape_outline():
+    """Replace the outline of the routed board and refill the zones."""
+    board = pcbnew.LoadBoard(PCB)
+    old = [d for d in board.GetDrawings() if d.GetLayer() == pcbnew.Edge_Cuts]
+    for d in old:
+        board.Delete(d)
+    add_outline(board)
+    filler = pcbnew.ZONE_FILLER(board)
+    filler.Fill(board.Zones())
+    pcbnew.SaveBoard(PCB, board)
+    print("outline replaced,", len(old), "old edges removed")
+
+
 def add_line(board, layer, x1, y1, x2, y2, w=0.1):
     s = pcbnew.PCB_SHAPE(board)
     s.SetShape(pcbnew.SHAPE_T_SEGMENT)
@@ -79,11 +115,7 @@ def place():
             ni.SetNetClass(pw)
         nets[n] = ni
 
-    # outline
-    x0, y0 = D.to_kicad(0, D.BOARD_H)
-    x1, y1 = D.to_kicad(D.BOARD_W, 0)
-    for a, b in (((x0, y0), (x1, y0)), ((x1, y0), (x1, y1)), ((x1, y1), (x0, y1)), ((x0, y1), (x0, y0))):
-        add_line(board, pcbnew.Edge_Cuts, a[0], a[1], b[0], b[1], 0.1)
+    add_outline(board)
 
     for p in D.PARTS + D.MECH:
         fp = load_fp(p["fp"])
@@ -250,4 +282,4 @@ def import_ses(board, ses):
 
 
 if __name__ == "__main__":
-    {"place": place, "finish": finish}[sys.argv[1]]()
+    {"place": place, "finish": finish, "outline": reshape_outline}[sys.argv[1]]()

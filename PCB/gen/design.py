@@ -10,6 +10,7 @@ Rotation is the KiCad footprint rotation in degrees.
 """
 
 BOARD_W, BOARD_H = 100.0, 81.0
+CORNER_R = 3.0                      # rounded corners, centred on the front mounting holes
 X0, Y0 = 98.5011, 145.5036          # Uzebox (0,0) in Omega KiCad coordinates
 
 
