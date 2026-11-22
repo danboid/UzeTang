@@ -102,10 +102,6 @@ PARTS = [
          x=60.1, y=37.0, rot=0, pads={"1": "GND", "2": "+3V3_ESP", "3": "+5V"},
          sym="LDO", dk="497-1491-5-ND", optional=True,
          note="3.3 V for the ESP-12F (its current peaks are too much for the Tang's 3.3 V)"),
-    dict(ref="J4", value="ESP FLASH", fp=f"{LIB}:PinHeader_1x02_P2.54mm_Vertical",
-         x=64.0, y=21.0, rot=90, pads={"1": "ESP_IO0", "2": "GND"}, sym="CONN2",
-         dk="S1011EC-40-ND", optional=True,
-         note="Fit a jumper (S9001-ND) to boot the ESP-12F into flash mode"),
     # ---- pull-ups
     R("R1", "4.7k", "+3V3", "SNES1_DATA", 26.5, 8.0, 0, DK_4K7, "SNES P1 data pull-up"),
     R("R2", "4.7k", "+3V3", "SNES2_DATA", 59.5, 12.0, 0, DK_4K7, "SNES P2 data pull-up"),

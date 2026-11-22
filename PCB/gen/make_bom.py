@@ -37,8 +37,6 @@ OPT = [
     ("493-1041-ND", 1, "CAP ALUM 220UF RADIAL 6.3MM DIA 2.5MM PITCH", "C8", "ESP transmit peaks"),
     ("478-3192-ND", 1, "CAP CER .10UF 50V 20% RADIAL", "C9", ""),
     ("10.0KXBK-ND", 4, "RES 10K OHM 1/4W 1% METAL FILM", "R10, R11, R12, R13", "ESP EN/RST/IO0/IO2 pull-ups"),
-    ("S1011EC-40-ND", 1, "CONN HEADER VERT 40POS 2.54MM (break off 2)", "J4", "ESP flash-mode jumper"),
-    ("S9001-ND", 1, "CONN JUMPER SHORTING 2.54MM", "J4", "Fit to boot the ESP-12F into flash mode"),
 ]
 OTHER = [
     ("Sipeed Tang Nano 20K (with pin headers fitted)", 1, "U1", "Sipeed / AliExpress; not sold by Digi-Key"),

@@ -70,7 +70,6 @@ def symbol_defs(board):
         "R": ([("1", "~")], [("2", "~")], True, "R", "Resistor"),
         "C": ([("1", "~")], [("2", "~")], True, "C", "Capacitor"),
         "CP": ([("1", "+")], [("2", "-")], False, "C", "Polarised capacitor"),
-        "Jumper2": ([("1", "1")], [("2", "2")], False, "J", "2-pin header + shunt"),
     }
 
 
@@ -83,7 +82,6 @@ def sym_for(ref, fpname):
     if ref.startswith("SW"): return "SW_Tactile"
     if ref.startswith("D"): return "LED"
     if ref.startswith("R"): return "R"
-    if ref == "J4": return "Jumper2"
     if ref.startswith("C"): return "CP" if "CP_" in fpname else "C"
     return None
 
@@ -149,7 +147,7 @@ PLACE = {
     "D1": (g(270), g(85)),
     "J3": (g(180), g(135)),
     "U2": (g(340), g(130)),
-    "U3": (g(340), g(45)), "J4": (g(340), g(70)),
+    "U3": (g(340), g(45)),
 }
 PASSIVES = ["R1", "R2", "C1", "C2", "R3", "R4", "R5", "R6", "C3", "C4", "R7", "R8",
             "R9", "C5", "C6", "C7", "C8", "C9", "R10", "R11", "R12", "R13"]
