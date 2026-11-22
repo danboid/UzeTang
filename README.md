@@ -93,7 +93,7 @@ add yourself to the `plugdev` group.
 Connect the Tang Nano 20K by USB, then:
 
 ```
-openFPGALoader -f uzetang_oss.fs
+openFPGALoader -f uzetang.fs
 ```
 
 `-f` writes to the board's flash, so UzeTang starts every time the board is
