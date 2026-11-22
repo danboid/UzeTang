@@ -24,5 +24,7 @@ $NEXTPNR --json "$OUT/uzetang.json" --write "$OUT/uzetang_pnr.json" \
     --vopt cst="$OUT/uzetang_oss.cst" --freq 28.7 --threads 2 \
     --report "$OUT/report.json" 2>&1 | tee "$OUT/nextpnr.log" | grep -E "Info: Device utilisation|Info: \s+[A-Z_]+:|Max frequency|ERROR|Warning: .*timing" || true
 if grep -q "^ERROR" "$OUT/nextpnr.log"; then echo "nextpnr failed, see $OUT/nextpnr.log"; exit 1; fi
-gowin_pack -d GW2A-18C -o "$OUT/uzetang_oss.fs" "$OUT/uzetang_pnr.json"
+# gowin_pack through a wrapper that keeps bank 5 (HDMI + SNES pads) at 3.3 V
+# and sets the pad data inputs as the Gowin IDE does; see the script.
+python3 "$HERE/../tools/gowin_pack_bank33.py" -d GW2A-18C -o "$OUT/uzetang_oss.fs" "$OUT/uzetang_pnr.json"
 echo "bitstream: $OUT/uzetang_oss.fs"

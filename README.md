@@ -168,6 +168,24 @@ apicula only allows true LVDS buffers on the HDMI pins, so this flow uses
 `TLVDS_OBUF`. The Gowin flow uses emulated LVDS (`ELVDS_OBUF`), as SNESTang
 does.
 
+**SNES pads and I/O bank 5.** The SNES pad pins (25–30) share I/O bank 5 with
+the HDMI pins. With true LVDS outputs in the bank, apicula's `gowin_pack`
+(0.35) configures the whole bank for a low voltage, and it also sets two
+configuration bits on the pad data inputs differently from the Gowin IDE: it
+leaves `CLAMP=PCI` off and sets an input-standard bit that belongs to the
+differential / reference-voltage standards. With that bitstream the pad data
+line reads wrongly. Every pressed button also shows up as the next one in the
+SNES bit order, B reads as held, and START reads as START+UP, so Bootloader5
+loads the game above the highlighted one.
+
+`syn/oss_build.sh` therefore packs through `tools/gowin_pack_bank33.py`, a
+small wrapper around apicula's `gowin_pack`. It keeps banks with LVDS outputs
+at the board's real 3.3 V and sets those pad-input bits as the Gowin IDE sets
+them. The pad pins' I/O configuration then decodes identically to the Gowin
+build's, and the pads work in both builds. To check that against a Gowin
+bitstream, `tools/gowin_pack_bank33.py --iob-from uzetang.fs ...` copies the
+pad tiles' I/O fuses from it instead.
+
 The results below are from yosys 0.33 and nextpnr-himbaechel master
 (Nov 2026), for the GW2AR-LV18QN88C8/I7:
 

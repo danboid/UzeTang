@@ -1,0 +1,131 @@
+diff --git a/README.md b/README.md
+index c4975b0..cc972b0 100644
+--- a/README.md
++++ b/README.md
+@@ -168,6 +168,24 @@ apicula only allows true LVDS buffers on the HDMI pins, so this flow uses
+ `TLVDS_OBUF`. The Gowin flow uses emulated LVDS (`ELVDS_OBUF`), as SNESTang
+ does.
+ 
++**SNES pads and I/O bank 5.** The SNES pad pins (25–30) share I/O bank 5 with
++the HDMI pins. With true LVDS outputs in the bank, apicula's `gowin_pack`
++(0.35) configures the whole bank for a low voltage, and it also sets two
++configuration bits on the pad data inputs differently from the Gowin IDE: it
++leaves `CLAMP=PCI` off and sets an input-standard bit that belongs to the
++differential / reference-voltage standards. With that bitstream the pad data
++line reads wrongly. Every pressed button also shows up as the next one in the
++SNES bit order, B reads as held, and START reads as START+UP, so Bootloader5
++loads the game above the highlighted one.
++
++`syn/oss_build.sh` therefore packs through `tools/gowin_pack_bank33.py`, a
++small wrapper around apicula's `gowin_pack`. It keeps banks with LVDS outputs
++at the board's real 3.3 V and sets those pad-input bits as the Gowin IDE sets
++them. The pad pins' I/O configuration then decodes identically to the Gowin
++build's, and the pads work in both builds. To check that against a Gowin
++bitstream, `tools/gowin_pack_bank33.py --iob-from uzetang.fs ...` copies the
++pad tiles' I/O fuses from it instead.
++
+ The results below are from yosys 0.33 and nextpnr-himbaechel master
+ (Nov 2026), for the GW2AR-LV18QN88C8/I7:
+ 
+diff --git a/syn/oss_build.sh b/syn/oss_build.sh
+index 0494ba3..5c6d378 100755
+--- a/syn/oss_build.sh
++++ b/syn/oss_build.sh
+@@ -24,5 +24,7 @@ $NEXTPNR --json "$OUT/uzetang.json" --write "$OUT/uzetang_pnr.json" \
+     --vopt cst="$OUT/uzetang_oss.cst" --freq 28.7 --threads 2 \
+     --report "$OUT/report.json" 2>&1 | tee "$OUT/nextpnr.log" | grep -E "Info: Device utilisation|Info: \s+[A-Z_]+:|Max frequency|ERROR|Warning: .*timing" || true
+ if grep -q "^ERROR" "$OUT/nextpnr.log"; then echo "nextpnr failed, see $OUT/nextpnr.log"; exit 1; fi
+-gowin_pack -d GW2A-18C -o "$OUT/uzetang_oss.fs" "$OUT/uzetang_pnr.json"
++# gowin_pack through a wrapper that keeps bank 5 (HDMI + SNES pads) at 3.3 V
++# and sets the pad data inputs as the Gowin IDE does; see the script.
++python3 "$HERE/../tools/gowin_pack_bank33.py" -d GW2A-18C -o "$OUT/uzetang_oss.fs" "$OUT/uzetang_pnr.json"
+ echo "bitstream: $OUT/uzetang_oss.fs"
+diff --git a/tools/gowin_pack_bank33.py b/tools/gowin_pack_bank33.py
+new file mode 100755
+index 0000000..a0ef199
+--- /dev/null
++++ b/tools/gowin_pack_bank33.py
+@@ -0,0 +1,83 @@
++#!/usr/bin/env python3
++"""gowin_pack wrapper for UzeTang's open-source build.
++
++On the Tang Nano 20K the SNES pad pins (25-30) share I/O bank 5 with the
++HDMI pins. apicula's gowin_pack forces any bank with LVDS outputs to a
++1.2 V configuration, which also changes the pad pins' input settings.
++
++This wrapper:
++  - keeps banks with LVDS outputs at 3.3 V (the board's real VCCIO),
++  - sets the pad data inputs' remaining configuration fuses as the Gowin IDE
++    does (see PAD_INPUT_FUSES), and
++  - optionally (--iob-from REF.fs) copies the I/O-block configuration fuses
++    of the tiles holding pins 25-30 from a reference bitstream (for example
++    one built by the Gowin IDE), so those pins are set up exactly as Gowin
++    sets them. Only the IOB attribute fuses are copied, not routing.
++
++Usage: gowin_pack_bank33.py [--iob-from REF.fs] <normal gowin_pack args>
++"""
++import sys
++import apycula.gowin_pack as gp
++from apycula import chipdb
++from apycula.bslib import read_bitstream
++
++PAD_TILES = [(54, 5), (54, 7), (54, 13)]     # pins 25/26, 27/28, 29/30
++
++# Fuses that differ between apicula and the Gowin IDE for the two pad data
++# inputs (pin 25 = tile (54,5) IOBA, pin 30 = tile (54,13) IOBB) once the
++# bank is at 3.3 V. Set as the Gowin IDE sets them for an LVCMOS33 input:
++#   CLAMP=PCI on, and the input-standard bit that apicula sets for
++#   differential / reference-voltage standards cleared.
++PAD_INPUT_FUSES = {
++    (54, 5):  {(25, 27): 1, (26, 28): 0},     # IOBA, pin 25 (joy1_data)
++    (54, 13): {(25, 31): 1, (26, 30): 0},     # IOBB, pin 30 (joy2_data)
++}
++
++args = sys.argv[1:]
++ref = None
++if args[:1] == ["--iob-from"]:
++    ref = args[1]
++    args = args[2:]
++
++gp.Device.get_lvds_bank_vccio = lambda self: "3.3"
++
++_orig = {}
++for cls in [gp.Device] + gp.Device.__subclasses__():
++    if "fuse_bitmap" in cls.__dict__:
++        _orig[cls] = cls.__dict__["fuse_bitmap"]
++
++def make_fixed_wrapper(orig):
++    def fuse_bitmap(self, tilemap, *a, **k):
++        for tile, fuses in PAD_INPUT_FUSES.items():
++            for (fr, fc), v in fuses.items():
++                tilemap[tile][fr][fc] = v
++        return orig(self, tilemap, *a, **k)
++    return fuse_bitmap
++
++if not ref:
++    for cls, orig in _orig.items():
++        setattr(cls, "fuse_bitmap", make_fixed_wrapper(orig))
++
++if ref:
++    def make_wrapper(orig):
++        def fuse_bitmap(self, tilemap, *a, **k):
++            db = self.chipdb.db if hasattr(self.chipdb, "db") else self.chipdb
++            bm, _, _, _ = read_bitstream(ref)
++            ref_tiles = chipdb.tile_bitmap(db, bm)
++            for (r, c) in PAD_TILES:
++                ttyp = db[r, c].ttyp
++                coords = set()
++                for name in ("IOBA", "IOBB"):
++                    for fuses in db.longval[ttyp].get(name, {}).values():
++                        coords |= set(fuses)
++                for (fr, fc) in coords:
++                    tilemap[(r, c)][fr][fc] = ref_tiles[(r, c)][fr][fc]
++            print(f"copied IOB fuses of {PAD_TILES} from {ref}", file=sys.stderr)
++            return orig(self, tilemap, *a, **k)
++        return fuse_bitmap
++
++    for cls, orig in _orig.items():
++        setattr(cls, "fuse_bitmap", make_wrapper(orig))
++
++sys.argv = ["gowin_pack"] + args
++gp.main()
