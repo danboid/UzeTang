@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "UzeTang-Board")(type "KiCad")(uri "${KIPRJMOD}/UzeTang-Board.kicad_sym")(options "")(descr "UzeTang Board symbols"))
+)

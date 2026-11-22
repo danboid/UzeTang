@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "UzeTang-Board")(type "KiCad")(uri "${KIPRJMOD}/UzeTang-Board.pretty")(options "")(descr "UzeTang Board footprints"))
+)
