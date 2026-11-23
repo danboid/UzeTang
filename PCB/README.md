@@ -27,6 +27,8 @@ A carrier PCB that turns a Sipeed **Tang Nano 20K** into a boxed console for
   the Uzebox uses, each fed by a 1-bit DAC from the FPGA through a resistor
   and two capacitors. HDMI audio is unaffected. The whole audio section is
   optional.
+- **Optional EXT expansion header** (J6, 2×10, 2.54 mm) with every Tang I/O
+  pin the board doesn't use, plus 3.3 V, 5 V and GND.
 - Everything is through-hole except the SD socket (the same SMD socket the
   Uzebox uses). Two-layer board, GND poured on both sides.
 
@@ -58,10 +60,9 @@ front-left corner, y towards the back.
 | ESP-12F RST | 31 | Also pulled up to the ESP's 3.3 V |
 | Power LED | - | From the Tang's 3.3 V through 330 Ω |
 | Audio left / right (1-bit DAC) | 52 / 53 | Through the filters to J4 / J5 (optional) |
+| EXT header (J6) | 15-20, 41, 42, 51, 54, 55, 56, 79, 80, 85 | Every other Tang I/O; see below |
 
-SNES pads and the SD card run from the Tang's 3.3 V pins. Pins 80 and 85 are
-deliberately left unconnected: on the Tang Nano 20K they are shared with its
-own micro SD slot. All other free header pins are unused.
+SNES pads and the SD card run from the Tang's 3.3 V pins.
 
 ## Firmware changes
 
@@ -99,6 +100,41 @@ generates both outputs from the same samples.
 
 Leave out J4, J5, R14, R15 and C10-C13 for a board without analog audio.
 
+## EXT expansion header (optional)
+
+J6 is a 2×10, 2.54 mm pin header at the front right, between the Tang and the
+USER button, so a ribbon cable or a small add-on board can reach every FPGA
+pin the board doesn't use. It is clear of the Tang's USB-C plug. Pin 1 (square
+pad) is at the front left; odd pins are in the front row.
+
+| J6 pin | Signal | J6 pin | Signal |
+|---|---|---|---|
+| 1 | 3.3 V | 2 | 5 V |
+| 3 | Tang pin 15 | 4 | Tang pin 16 |
+| 5 | Tang pin 17 | 6 | Tang pin 18 |
+| 7 | Tang pin 19 | 8 | Tang pin 20 |
+| 9 | Tang pin 41 | 10 | Tang pin 42 |
+| 11 | Tang pin 51 | 12 | Tang pin 54 |
+| 13 | Tang pin 55 | 14 | Tang pin 56 |
+| 15 | Tang pin 79 | 16 | Tang pin 80 |
+| 17 | Tang pin 85 | 18 | GND |
+| 19 | GND | 20 | GND |
+
+All signals are 3.3 V LVCMOS straight from the FPGA, with nothing in between:
+don't connect 5 V logic to them. Some of them also go to parts on the Tang
+Nano 20K itself, so check its schematic before using them:
+
+- 15-20 drive the Tang's six onboard LEDs (lit when the pin is low).
+- 79 drives the Tang's WS2812 RGB LED.
+- 80 and 85 are shared with the Tang's own micro SD slot: leave that slot
+  empty if you use them.
+
+The 3.3 V and 5 V pins come from the Tang's supply (5 V is the USB-C supply),
+so keep the load small.
+
+If the ESP-12F or the analog audio parts aren't fitted, their pins (31, 48 and
+49; 52 and 53) are free too, but they don't go to J6.
+
 ## Updating the ESP-12F firmware
 
 The ESP-12F's serial port is wired only to the FPGA (pins 48 and 49), and its
@@ -125,6 +161,8 @@ an ESP-12 programming adapter.
    the 3.3 V output.
 7. Analog audio (optional): R14, R15, C10-C13 and the two RCA jacks. The
    jacks' plastic pegs locate them; the barrels point out of the back edge.
+8. EXT header (optional): J6, long pins up, square pad (pin 1) at the front
+   left.
 
 ### Fitting the case
 

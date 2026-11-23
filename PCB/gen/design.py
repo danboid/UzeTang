@@ -36,6 +36,15 @@ TANG = {
     "48": "ESP_RXD", "49": "ESP_TXD", "31": "ESP_RST",
     "52": "AUDIO_L_DAC", "53": "AUDIO_R_DAC",
 }
+# Every other Tang header I/O goes to the optional EXT header (J6)
+EXT_PINS = ["15", "16", "17", "18", "19", "20", "41", "42", "51", "54",
+            "55", "56", "79", "80", "85"]
+for _p in EXT_PINS:
+    TANG[_p] = f"EXT_{_p}"
+# J6 pin -> net: 1 +3V3, 2 +5V, 3-17 the Tang pins in order, 18-20 GND
+EXT_HEADER = {"1": "+3V3", "2": "+5V", "18": "GND", "19": "GND", "20": "GND"}
+for _i, _p in enumerate(EXT_PINS):
+    EXT_HEADER[str(3 + _i)] = f"EXT_{_p}"
 
 
 def snes(n):
@@ -124,6 +133,11 @@ PARTS = [
       note="Left DC block"),
     C("C13", "10u", "AUDIO_R_F", "AUDIO_R", 12.0, 64.0, 0, CP5_FP, DK_10U, sym="CP",
       note="Right DC block"),
+    # ---- EXT expansion header (optional): 2x10, 2.54 mm, front right,
+    #      clear of the Tang's USB-C cable. Pin 1 at the front left.
+    dict(ref="J6", value="EXT", fp=f"{LIB}:PinHeader_2x10_P2.54mm_Vertical",
+         x=44.0, y=15.5, rot=90, pads=EXT_HEADER, sym="EXT", dk="S2011EC-10-ND",
+         mpn="Sullins PRPC010DAAN-RC", note="Expansion header: all unused Tang I/O"),
     # ---- pull-ups
     R("R1", "4.7k", "+3V3", "SNES1_DATA", 26.5, 8.0, 0, DK_4K7, "SNES P1 data pull-up"),
     R("R2", "4.7k", "+3V3", "SNES2_DATA", 59.5, 12.0, 0, DK_4K7, "SNES P2 data pull-up"),
@@ -153,6 +167,8 @@ PARTS = [
 for p in PARTS:
     if p["ref"] in ("C6", "C7", "C8", "C9", "R10", "R11", "R12", "R13"):
         p["optional"] = True          # ESP-12F section
+    if p["ref"] == "J6":
+        p["optional"] = "ext"
     if p["ref"] in ("J4", "J5", "R14", "R15", "C10", "C11", "C12", "C13"):
         p["optional"] = "audio"       # analog audio section
 

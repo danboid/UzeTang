@@ -48,6 +48,10 @@ AUDIO = [
      "DAC low pass (1k + 10n: 16 kHz)"),
     ("P19607CT-ND", 2, "CAP ALUM 10UF RADIAL 5MM DIA 2MM PITCH", "C12, C13", "DC blocking"),
 ]
+EXT = [
+    ("S2011EC-10-ND", 1, "CONN HEADER VERT 20POS 2.54MM 2X10 (Sullins PRPC010DAAN-RC)", "J6",
+     "EXT expansion header: the 15 unused Tang I/O, 3.3 V, 5 V, GND"),
+]
 OTHER = [
     ("Sipeed Tang Nano 20K (with pin headers fitted)", 1, "U1", "Sipeed / AliExpress; not sold by Digi-Key"),
     ("SNES controller socket, straight pins (same as Uzebox)", 2, "J1, J2", "AliExpress, as for the Uzebox"),
@@ -110,6 +114,8 @@ section("Optional: removable ESP-12F for Uzenet (leave out for a board without W
 o0, o1 = rows(OPT)
 section("Optional: analog audio out on RCA jacks (leave out for HDMI audio only)")
 a0, a1 = rows(AUDIO)
+section("Optional: EXT expansion header")
+e0, e1 = rows(EXT)
 r += 1
 ws.cell(r, 3, "Digi-Key lines, core").font = Font(name=A, bold=True)
 ws.cell(r, 2, f"=COUNTA(A{c0}:A{c1})").font = Font(name=A, bold=True)
@@ -119,6 +125,9 @@ ws.cell(r, 2, f"=COUNTA(A{o0}:A{o1})").font = Font(name=A, bold=True)
 r += 1
 ws.cell(r, 3, "Digi-Key lines, audio option").font = Font(name=A, bold=True)
 ws.cell(r, 2, f"=COUNTA(A{a0}:A{a1})").font = Font(name=A, bold=True)
+r += 1
+ws.cell(r, 3, "Digi-Key lines, EXT header option").font = Font(name=A, bold=True)
+ws.cell(r, 2, f"=COUNTA(A{e0}:A{e1})").font = Font(name=A, bold=True)
 r += 2
 
 section("Not from Digi-Key")
