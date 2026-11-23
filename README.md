@@ -26,6 +26,8 @@ it has not been tested at all yet so try it at your own risk.
 I don't plan to port it to any other Tang boards but I would like to see it ported
 to the Spectrum Next, MEGA65 and other open source modern retro FPGA based computers.
 
+See [this forum topic](https://uzebox.org/forums/viewtopic.php?t=11951) for discussion and more information about UzeTang.
+
 ## Hardware
 
 | Function | Tang Nano 20K pins | Notes |
