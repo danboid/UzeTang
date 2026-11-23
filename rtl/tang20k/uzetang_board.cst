@@ -68,3 +68,10 @@ IO_PORT "joy2_data" PULL_MODE=UP IO_TYPE=LVCMOS33;
 
 // Embedded SDRAM: no constraints needed, the O_sdram_* / IO_sdram_* port
 // names connect to the in-package SDRAM automatically.
+
+// Analog audio: 1-bit sigma-delta DAC, same mono signal on both pins
+// (RCA jacks via the board's 1k/10n filters)
+IO_LOC "audio_l" 52;
+IO_PORT "audio_l" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "audio_r" 53;
+IO_PORT "audio_r" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;

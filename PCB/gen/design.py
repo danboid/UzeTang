@@ -34,6 +34,7 @@ TANG = {
     "77": "SD_DAT1", "86": "SD_DAT2",
     "71": "BTN_RESET", "72": "BTN_USER",
     "48": "ESP_RXD", "49": "ESP_TXD", "31": "ESP_RST",
+    "52": "AUDIO_L_DAC", "53": "AUDIO_R_DAC",
 }
 
 
@@ -64,6 +65,9 @@ DK_330 = "332XBK-ND"
 DK_100N = "478-3192-ND"
 DK_10U = "P19607CT-ND"
 DK_220U = "493-1041-ND"
+DK_1K = "1.00KXBK-ND"
+DK_10N = "478-3178-ND"          # AVX SR151C103KAR, X7R, 2.54 mm lead spacing
+RCA_FP = f"{LIB}:RCA"
 
 PARTS = [
     # ---- Tang Nano 20K: HDMI end at the back edge, USB-C towards the front
@@ -102,6 +106,24 @@ PARTS = [
          x=60.1, y=37.0, rot=0, pads={"1": "GND", "2": "+3V3_ESP", "3": "+5V"},
          sym="LDO", dk="497-1491-5-ND", optional=True,
          note="3.3 V for the ESP-12F (its current peaks are too much for the Tang's 3.3 V)"),
+    # ---- analog audio (optional): FPGA 1-bit DAC -> 1k/10n low pass (16 kHz)
+    #      -> 10u DC block -> RCA jack. Same RCA jacks as the Uzebox: the
+    #      left one sits where the Uzebox has its AUDIO jack, the right one
+    #      where it has its DC power jack (white left, red right from behind).
+    dict(ref="J4", value="AUDIO L", fp=RCA_FP, x=47.2, y=75.5, rot=0,
+         pads={"SIG": "AUDIO_L", "GND": "GND"}, sym="RCA", dk="CP-1420-ND",
+         mpn="CUI RCJ-043 (white)", note="Left / mono audio out, as the Uzebox"),
+    dict(ref="J5", value="AUDIO R", fp=RCA_FP, x=7.62, y=75.5, rot=0,
+         pads={"SIG": "AUDIO_R", "GND": "GND"}, sym="RCA", dk="CP-1419-ND",
+         mpn="CUI RCJ-042 (red)", note="Right audio out, where the Uzebox has its DC jack"),
+    R("R14", "1k", "AUDIO_L_F", "AUDIO_L_DAC", 3.0, 51.5, 0, DK_1K, "Left DAC low pass"),
+    R("R15", "1k", "AUDIO_R_F", "AUDIO_R_DAC", 3.0, 48.0, 0, DK_1K, "Right DAC low pass"),
+    C("C10", "10n", "AUDIO_L_F", "GND", 3.0, 43.0, 0, C_FP, DK_10N, note="Left DAC low pass"),
+    C("C11", "10n", "AUDIO_R_F", "GND", 9.0, 43.0, 0, C_FP, DK_10N, note="Right DAC low pass"),
+    C("C12", "10u", "AUDIO_L_F", "AUDIO_L", 45.5, 64.0, 0, CP5_FP, DK_10U, sym="CP",
+      note="Left DC block"),
+    C("C13", "10u", "AUDIO_R_F", "AUDIO_R", 12.0, 64.0, 0, CP5_FP, DK_10U, sym="CP",
+      note="Right DC block"),
     # ---- pull-ups
     R("R1", "4.7k", "+3V3", "SNES1_DATA", 26.5, 8.0, 0, DK_4K7, "SNES P1 data pull-up"),
     R("R2", "4.7k", "+3V3", "SNES2_DATA", 59.5, 12.0, 0, DK_4K7, "SNES P2 data pull-up"),
@@ -130,7 +152,9 @@ PARTS = [
 ]
 for p in PARTS:
     if p["ref"] in ("C6", "C7", "C8", "C9", "R10", "R11", "R12", "R13"):
-        p["optional"] = True
+        p["optional"] = True          # ESP-12F section
+    if p["ref"] in ("J4", "J5", "R14", "R15", "C10", "C11", "C12", "C13"):
+        p["optional"] = "audio"       # analog audio section
 
 MECH = [
     dict(ref="H1", fp=f"{LIB}:MountingHole_3.3mm_Uzebox", x=3.0, y=3.0),
@@ -166,7 +190,7 @@ def nets():
 # the autorouter otherwise fails to reach through the resistor bank.
 PREROUTES = [
     {"net": "+3V3", "layer": "F", "w": 0.6,
-     "pts": [(40.16, 72.59), (45.5, 72.59), (50.5, 67.5), (75.0, 67.5)],
+     "pts": [(40.16, 72.59), (43.24, 69.51), (45.25, 67.5), (75.0, 67.5)],
      "vias": [(75.0, 67.5)]},
     {"net": "+3V3", "layer": "B", "w": 0.6,
      "pts": [(75.0, 67.5), (78.0, 64.5), (78.0, 45.5)]},

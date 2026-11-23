@@ -124,7 +124,7 @@ def place():
         x, y = D.to_kicad(p["x"], p["y"])
         fp.SetPosition(vec(x, y))
         fp.SetOrientationDegrees(p.get("rot", 0))
-        if p["ref"] in ("J1", "J2", "SW1", "SW2"):
+        if p["ref"] in ("J1", "J2", "SW1", "SW2", "J4", "J5"):
             # the SNES P1/P2 and RESET/USER labels say what these are
             fp.Reference().SetVisible(False)
         board.Add(fp)
@@ -146,7 +146,9 @@ def place():
     T("USER", 77.47, 18.6, 1.0)
     T("ESP-12F", 85.0, 30.5, 0.9)
     T("SD CARD", 83.0, 77.0, 1.2)
-    T("UzeTang v1.0", 55.0, 78.5, 1.3)
+    T("UzeTang v1.0", 64.0, 18.5, 1.3)
+    T("AUDIO L", 47.2, 67.9, 1.0)
+    T("AUDIO R", 7.62, 67.9, 1.0)
     T("UzeTang v1.0", 83.0, 67.0, 1.5, 0, pcbnew.B_SilkS)
     T("Tang Nano 20K carrier", 83.0, 64.9, 1.0, 0, pcbnew.B_SilkS)
     T("for UzeTang / SNESTang", 83.0, 63.1, 1.0, 0, pcbnew.B_SilkS)

@@ -38,6 +38,16 @@ OPT = [
     ("478-3192-ND", 1, "CAP CER .10UF 50V 20% RADIAL", "C9", ""),
     ("10.0KXBK-ND", 4, "RES 10K OHM 1/4W 1% METAL FILM", "R10, R11, R12, R13", "ESP EN/RST/IO0/IO2 pull-ups"),
 ]
+AUDIO = [
+    ("CP-1420-ND", 1, "CONN RCA JACK R/A WHITE PCB (CUI RCJ-043)", "J4",
+     "Left / mono; same jack and position as the Uzebox AUDIO jack"),
+    ("CP-1419-ND", 1, "CONN RCA JACK R/A RED PCB (CUI RCJ-042)", "J5",
+     "Right; where the Uzebox has its DC power jack"),
+    ("1.00KXBK-ND", 2, "RES 1K OHM 1/4W 1% METAL FILM", "R14, R15", "DAC low pass"),
+    ("478-3178-ND", 2, "CAP CER 10000PF 100V X7R RADIAL 2.54MM (AVX SR151C103KAR)", "C10, C11",
+     "DAC low pass (1k + 10n: 16 kHz)"),
+    ("P19607CT-ND", 2, "CAP ALUM 10UF RADIAL 5MM DIA 2MM PITCH", "C12, C13", "DC blocking"),
+]
 OTHER = [
     ("Sipeed Tang Nano 20K (with pin headers fitted)", 1, "U1", "Sipeed / AliExpress; not sold by Digi-Key"),
     ("SNES controller socket, straight pins (same as Uzebox)", 2, "J1, J2", "AliExpress, as for the Uzebox"),
@@ -56,7 +66,7 @@ thin = Side(style="thin", color="BFBFBF")
 bd = Border(top=thin, bottom=thin, left=thin, right=thin)
 base = Font(name=A, size=10)
 
-ws["A1"] = "UzeTang Board v1.0 Digi-Key BOM. Last updated 22nd November 2026."
+ws["A1"] = "UzeTang Board v1.0 Digi-Key BOM. Last updated 23rd November 2026."
 ws["A1"].font = Font(name=A, bold=True, size=13)
 ws["A2"] = ("Columns A-B and D paste straight into Digi-Key's BOM Manager / Quick Add "
             "(part number, quantity, customer reference). Board quantity in F3 scales the order.")
@@ -98,12 +108,17 @@ section("Core parts (required)")
 c0, c1 = rows(CORE)
 section("Optional: removable ESP-12F for Uzenet (leave out for a board without WiFi)")
 o0, o1 = rows(OPT)
+section("Optional: analog audio out on RCA jacks (leave out for HDMI audio only)")
+a0, a1 = rows(AUDIO)
 r += 1
 ws.cell(r, 3, "Digi-Key lines, core").font = Font(name=A, bold=True)
 ws.cell(r, 2, f"=COUNTA(A{c0}:A{c1})").font = Font(name=A, bold=True)
 r += 1
 ws.cell(r, 3, "Digi-Key lines, ESP option").font = Font(name=A, bold=True)
 ws.cell(r, 2, f"=COUNTA(A{o0}:A{o1})").font = Font(name=A, bold=True)
+r += 1
+ws.cell(r, 3, "Digi-Key lines, audio option").font = Font(name=A, bold=True)
+ws.cell(r, 2, f"=COUNTA(A{a0}:A{a1})").font = Font(name=A, bold=True)
 r += 2
 
 section("Not from Digi-Key")

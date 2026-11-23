@@ -23,6 +23,10 @@ A carrier PCB that turns a Sipeed **Tang Nano 20K** into a boxed console for
 - **Removable ESP-12F** (Uzenet) on two 8-pin 2 mm receptacles, as on the
   Uzebox, with its own LD1117V33 regulator fed from the Tang's 5 V. The whole
   ESP section is optional.
+- **Optional analog audio** on two RCA jacks, the same white and red jacks
+  the Uzebox uses, each fed by a 1-bit DAC from the FPGA through a resistor
+  and two capacitors. HDMI audio is unaffected. The whole audio section is
+  optional.
 - Everything is through-hole except the SD socket (the same SMD socket the
   Uzebox uses). Two-layer board, GND poured on both sides.
 
@@ -53,6 +57,7 @@ front-left corner, y towards the back.
 | ESP-12F RXD (FPGA TX) / TXD (FPGA RX) | 48 / 49 | |
 | ESP-12F RST | 31 | Also pulled up to the ESP's 3.3 V |
 | Power LED | - | From the Tang's 3.3 V through 330 Ω |
+| Audio left / right (1-bit DAC) | 52 / 53 | Through the filters to J4 / J5 (optional) |
 
 SNES pads and the SD card run from the Tang's 3.3 V pins. Pins 80 and 85 are
 deliberately left unconnected: on the Tang Nano 20K they are shared with its
@@ -70,6 +75,29 @@ the bare Tang Nano 20K, so the bitstreams need a board constraint file:
 - **SNESTang:** in `nano20k.cst`, move the two buttons to 71 / 72 and the SD
   lines to the pins in the table above. Both stay active high, as on the
   Tang's own buttons.
+
+## Analog audio (optional)
+
+Two RCA jacks at the back carry line-level audio, alongside HDMI audio:
+
+- **J4, white, left** sits exactly where the Uzebox has its AUDIO jack.
+- **J5, red, right** sits where the Uzebox has its DC power jack. Seen from
+  behind the console, white is on the left and red on the right.
+
+Each channel is one FPGA pin driving a 1-bit sigma-delta DAC, then a 1k / 10 nF
+low pass (corner about 16 kHz) and a 10 µF DC-blocking capacitor: three parts
+per channel. The output is up to 3.3 V peak to peak, centred on 0 V after the
+capacitor; that is a normal line level for a TV or amplifier input.
+
+UzeTang drives both pins with the same mono Uzebox sound (it is a mono
+console), the same signal it sends over HDMI. Stereo needs a core that
+produces stereo, such as SNESTang if analog output were added to it: it would
+use pins 52 and 53 the same way.
+
+HDMI audio is unaffected: the DAC uses two spare header pins, and the FPGA
+generates both outputs from the same samples.
+
+Leave out J4, J5, R14, R15 and C10-C13 for a board without analog audio.
 
 ## Updating the ESP-12F firmware
 
@@ -95,11 +123,13 @@ an ESP-12 programming adapter.
    hole in the board, then solder it. An M3 screw and nut through the tab is
    optional. There is no top-side copper under the tab, which is connected to
    the 3.3 V output.
+7. Analog audio (optional): R14, R15, C10-C13 and the two RCA jacks. The
+   jacks' plastic pegs locate them; the barrels point out of the back edge.
 
 ### Fitting the case
 
-The case's back wall was built for the Uzebox's DC jack, S-video and RCA
-jacks, which this board does not have. Cut or redesign the rear openings for:
+The case's back wall was built for the Uzebox's DC jack, mini-DIN and RCA
+jacks. Cut or redesign the rear openings for:
 
 - the Tang Nano 20K's **HDMI socket**, centred about 30 mm from the board's
   left edge. Its height depends on the headers: with standard 8.5 mm female
@@ -108,6 +138,15 @@ jacks, which this board does not have. Cut or redesign the rear openings for:
   opening.
 - a panel-mount **USB-C** extension (the Tang's USB-C faces the front inside
   the case).
+
+If you fit the optional audio jacks, they reuse two of the Uzebox positions:
+
+- the **left jack** (J4, white) is where the Uzebox has its AUDIO jack, so the
+  existing opening fits. It is 0.2 mm to the right of the Uzebox position, to
+  keep its locating peg clear of the Tang module's edge.
+- the **right jack** (J5, red) is centred on the Uzebox DC jack's position
+  (x = 7.62 mm). The DC jack's opening is a different shape, so it may need
+  opening out to fit an RCA barrel.
 
 The SD card slot and all the front-panel openings stay as they are. There is
 about 22 mm of headroom above the PCB, enough for the Tang on 8.5 mm headers.

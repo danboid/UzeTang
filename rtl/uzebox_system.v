@@ -56,6 +56,7 @@ module uzebox_system #(
     // HDMI
     output wire [2:0]  tmds,
     output wire        tmds_clock,
+    output wire        audio_dac,    // 1-bit audio DAC (pixel clock domain)
 
     // status
     output wire        led_sd,
@@ -118,7 +119,7 @@ module uzebox_system #(
         .lb_addr(lb_raddr), .lb_data(lb_rdata),
         .snd_val(snd_val), .snd_tog(snd_tog),
         .frame_tog(frame_tog),
-        .tmds(tmds), .tmds_clock(tmds_clock)
+        .tmds(tmds), .tmds_clock(tmds_clock), .audio_dac(audio_dac)
     );
 
     sdram_ctl #(.FREQ(SDRAM_FREQ), .AW(SPIRAM_BITS)) sdram (

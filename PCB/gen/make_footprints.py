@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Footprint library for the UzeTang board (KiCad 7 format).
 
-- SNES_CONNECTOR, TACTILE-PTH, SDCARD_4UCONN, LED3MM, UZEBOX_ESP-12_TH:
+- SNES_CONNECTOR, TACTILE-PTH, SDCARD_4UCONN, LED3MM, RCA:
   converted from the Uzebox Omega v1.5 KiCad library (itself converted from
   the Uzebox Eagle libraries), so pads sit exactly where the Uzebox case and
   the Uzebox parts expect them.
@@ -24,6 +24,17 @@ def convert(name):
     s = open(os.path.join(OMEGA, name + ".kicad_mod")).read()
     if name == "LED3MM":
         s = led_inner_ring_to_fab(s)
+    if name == "RCA":
+        # The Omega silkscreen runs across the jack's two NPTH board-lock
+        # holes; keep that outline on F.Fab and draw one that misses them.
+        s = re.sub(r'(\(fp_line [^\n]*\(layer )"F\.SilkS"', r'\1"F.Fab"', s)
+        s = s.rstrip().rstrip(")") + "".join(
+            f'  (fp_line (start {a} {b}) (end {c} {d}) (stroke (width 0.2032) (type solid)) (layer "F.SilkS"))\n'
+            for a, b, c, d in ((-5, 6.6, 5, 6.6), (-5, -1.2, -5, 6.6), (5, -1.2, 5, 6.6), (-2.3, -4, 2.3, -4))) + ")\n"
+        # courtyard round the part of the jack that sits on the board
+        s = s.rstrip().rstrip(")") + (
+            '  (fp_rect (start -5.0 -4.1) (end 5.0 6.7) (stroke (width 0.05) (type solid))'
+            ' (fill none) (layer "F.CrtYd"))\n)\n')
     s = re.sub(r'\(version \d+\)', '(version 20221018)', s)
     s = re.sub(r'\(generator "[^"]*"\)', '(generator pcbnew)', s)
     # KiCad 8 'property' fields -> KiCad 7 fp_text
@@ -32,7 +43,7 @@ def convert(name):
     s = re.sub(r'\(property "[^"]*" "[^"]*"[^\n]*\n', '', s)
     open(os.path.join(OUT, name + ".kicad_mod"), "w").write(s)
 
-for n in ("SNES_CONNECTOR", "TACTILE-PTH", "SDCARD_4UCONN", "LED3MM", "UZEBOX_ESP-12_TH"):
+for n in ("SNES_CONNECTOR", "TACTILE-PTH", "SDCARD_4UCONN", "LED3MM", "RCA"):
     convert(n)
 
 # ---------------- Tang Nano 20K ----------------
@@ -78,8 +89,8 @@ open(os.path.join(OUT, "MountingHole_3.3mm_Uzebox.kicad_mod"), "w").write('''(fo
   (attr exclude_from_pos_files exclude_from_bom)
   (fp_text reference "REF**" (at 0 -4.2) (layer "F.SilkS") hide (effects (font (size 1 1) (thickness 0.15))))
   (fp_text value "MountingHole" (at 0 4.2) (layer "F.Fab") (effects (font (size 1 1) (thickness 0.15))))
-  (fp_circle (center 0 0) (end 3.25 0) (stroke (width 0.15) (type solid)) (fill none) (layer "F.SilkS"))
-  (fp_circle (center 0 0) (end 3.5 0) (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd"))
+  (fp_circle (center 0 0) (end 2.9 0) (stroke (width 0.15) (type solid)) (fill none) (layer "F.SilkS"))
+  (fp_circle (center 0 0) (end 2.9 0) (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd"))
   (pad "" np_thru_hole circle (at 0 0) (size 3.302 3.302) (drill 3.302) (layers "*.Cu" "*.Mask"))
 )
 ''')

@@ -67,6 +67,7 @@ def symbol_defs(board):
         "LD1117V33": ([("3", "VIN")], [("2", "VOUT"), ("1", "GND")], False, "U", "3.3 V 800 mA LDO, TO-220"),
         "SW_Tactile": ([("1", "A"), ("2", "A")], [("3", "B"), ("4", "B")], False, "SW", "6 mm tactile switch, 4 pins"),
         "LED": ([("A", "A")], [("K", "K")], False, "D", "3 mm LED"),
+        "RCA_Jack": ([("SIG", "SIG"), ("GND", "GND")], [], False, "J", "RCA jack, right angle (CUI RCJ-04x)"),
         "R": ([("1", "~")], [("2", "~")], True, "R", "Resistor"),
         "C": ([("1", "~")], [("2", "~")], True, "C", "Capacitor"),
         "CP": ([("1", "+")], [("2", "-")], False, "C", "Polarised capacitor"),
@@ -79,6 +80,7 @@ def sym_for(ref, fpname):
     if ref == "J3": return "SD_Socket"
     if ref == "U2": return "ESP-12F"
     if ref == "U3": return "LD1117V33"
+    if ref in ("J4", "J5"): return "RCA_Jack"
     if ref.startswith("SW"): return "SW_Tactile"
     if ref.startswith("D"): return "LED"
     if ref.startswith("R"): return "R"
@@ -148,22 +150,30 @@ PLACE = {
     "J3": (g(180), g(135)),
     "U2": (g(340), g(130)),
     "U3": (g(340), g(45)),
+    "J4": (g(390), g(70)), "J5": (g(390), g(85)),
 }
 PASSIVES = ["R1", "R2", "C1", "C2", "R3", "R4", "R5", "R6", "C3", "C4", "R7", "R8",
             "R9", "C5", "C6", "C7", "C8", "C9", "R10", "R11", "R12", "R13"]
 for i, r in enumerate(PASSIVES):
     col, row = divmod(i, 6)
     PLACE[r] = (g(55 + col * 95), g(195 + row * 15.24))
+# audio filters, under the buttons
+for i, (l, r) in enumerate((("R14", "R15"), ("C10", "C11"), ("C12", "C13"))):
+    PLACE[l] = (g(245), g(150 + i * 12.7))
+    PLACE[r] = (g(310), g(150 + i * 12.7))
 
 NOTES = [
     (g(30), g(45), "Tang Nano 20K carrier: the module plugs\\ninto two 1x20 female headers.\\n"
      "SD: 73/74/75/76/77/86 (full SDIO)\\nSNES: 25-30   Buttons: 71/72 (active high)\\n"
+     "Audio DAC: 52 (left), 53 (right)\\n"
      "Unused Tang pins are left free."),
     (g(150), g(20), "SNES controller ports (3.3 V)"),
     (g(250), g(20), "Buttons and power LED"),
     (g(150), g(110), "microSD socket"),
     (g(315), g(20), "Optional Uzenet ESP-12F (own 3.3 V LDO from the Tang's 5 V)"),
     (g(30), g(183), "Pull-ups and decoupling"),
+    (g(220), g(137), "Audio filters: 1k + 10n low pass (16 kHz), 10u DC block"),
+    (g(365), g(60), "Optional analog audio (RCA)"),
 ]
 
 

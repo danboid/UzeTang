@@ -29,6 +29,11 @@ module uzetang_top (
     output wire [2:0]  tmds_d_p,
     output wire [2:0]  tmds_d_n,
 
+    // analog audio: 1-bit DAC, the same (mono) signal on both pins.
+    // UzeTang Board: RC filter + RCA jacks; unused pins on a bare Tang.
+    output wire        audio_l,
+    output wire        audio_r,
+
     // micro SD card (SPI mode)
     output wire        sd_clk,
     output wire        sd_cmd,         // MOSI
@@ -161,6 +166,9 @@ module uzetang_top (
     // System
     // ------------------------------------------------------------------
     wire [2:0] tmds;
+    wire       audio_dac;
+    assign audio_l = audio_dac;
+    assign audio_r = audio_dac;
     wire       tmds_clock;
     wire       led_sd, led_ram, vlocked, waiting;
     wire       sd_cs_n;
@@ -179,7 +187,7 @@ module uzetang_top (
         .sdram_cas_n(O_sdram_cas_n), .sdram_we_n(O_sdram_wen_n), .sdram_addr(O_sdram_addr),
         .sdram_ba(O_sdram_ba), .sdram_dqm(O_sdram_dqm),
         .sdram_dq_out(dq_out), .sdram_dq_oe(dq_oe), .sdram_dq_in(IO_sdram_dq),
-        .tmds(tmds), .tmds_clock(tmds_clock),
+        .tmds(tmds), .tmds_clock(tmds_clock), .audio_dac(audio_dac),
         .led_sd(led_sd), .led_ram(led_ram), .video_locked(vlocked), .waiting(waiting),
         .dbg_istart(), .dbg_pc(), .cpu_ce()
     );

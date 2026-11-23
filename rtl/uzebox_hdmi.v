@@ -35,7 +35,11 @@ module uzebox_hdmi #(
     output reg         frame_tog,
 
     output wire [2:0]  tmds,
-    output wire        tmds_clock
+    output wire        tmds_clock,
+
+    // 1-bit sigma-delta DAC of the same sample, for analog audio out
+    // (UzeTang Board: 1k + 10n low pass and a DC-blocking cap per RCA jack)
+    output wire        audio_dac
 );
     wire [9:0] cx;
     wire [9:0] cy;
@@ -86,6 +90,15 @@ module uzebox_hdmi #(
         tog_s <= {tog_s[1:0], snd_tog};
         if (tog_s[2] != tog_s[1]) smp <= snd_val;
     end
+    // First-order sigma-delta at the 27 MHz pixel clock: the density of
+    // ones follows the 8-bit sample, like the Uzebox's PWM audio pin.
+    reg [8:0] dac_acc;
+    always @(posedge clk_pixel) begin
+        if (rst) dac_acc <= 9'd0;
+        else     dac_acc <= {1'b0, dac_acc[7:0]} + {1'b0, smp};
+    end
+    assign audio_dac = dac_acc[8];
+
     // one-pole low pass (~5 kHz) at 48 kHz, 16 bit signed output
     reg  signed [15:0] filt;
     wire signed [15:0] x16 = {smp ^ 8'h80, 8'h00};
