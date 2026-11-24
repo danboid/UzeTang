@@ -240,9 +240,11 @@ All test benches are in `sim/` (Verilator):
 - **`tb_system`** (`Vsim_system`, or `Vsim_system` in `sysobj_lite` with the
   open-source HDMI encoder) simulates the whole board design with real
   clock ratios: frame lock, HDMI encoder input, SDRAM, a bit-level SD card
-  model with CRC serving a FAT32 image, and scripted pad presses. It writes
-  the HDMI frames as images. It covers the whole path: power-up, Bootloader5's
-  menu, flashing a game from SD, booting it, and pad detection and buttons.
+  model with CRC serving a FAT32 image, scripted pad presses, and SNES mouse
+  moves and clicks (`-m`). It writes the HDMI frames as images and can record
+  the audio output as a WAV file (`-a`). It covers the whole path: power-up,
+  Bootloader5's menu, flashing a game from SD, booting it, and pad detection
+  and buttons.
 
 **Known deliberate difference from CUzeBox-ex:** PINA returns the *live* pad
 data lines, as a real AVR does. The emulator latches them on PORTA writes. This

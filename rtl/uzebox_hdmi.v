@@ -103,8 +103,11 @@ module uzebox_hdmi #(
     reg  signed [15:0] filt;
     wire signed [15:0] x16 = {smp ^ 8'h80, 8'h00};
     reg  [15:0] audio_word [1:0];
+    // the difference needs 17 bits: in 16 it wraps when the sample jumps by
+    // more than half the range, and the output then jumps the wrong way
+    wire signed [16:0] fdiff = {x16[15], x16} - {filt[15], filt};
     always @(posedge clk_audio) begin
-        filt <= filt + ((x16 - filt) >>> 1);
+        filt <= filt + fdiff[16:1];
         audio_word[0] <= filt;
         audio_word[1] <= filt;
     end

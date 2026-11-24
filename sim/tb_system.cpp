@@ -12,6 +12,14 @@
 //    -t frames       number of HDMI frames to simulate
 //    -f a,b,c        dump HDMI frames a,b,c to hdmi_NNN.ppm
 //    -k f:mask:len   press buttons 'mask' (SNES bit order) at frame f for len frames
+//    -m f:ext:btn:len SNES mouse on port 1 from frame f for len frames: 'ext' is
+//                    the 16 bits after the buttons, as the kernel stores them:
+//                    bits 6-0 X speed, bit 15 X direction (1 = left), bits 14-8
+//                    Y speed, bit 7 Y direction (1 = up); 'btn' the first 16
+//                    bits without the 0x8000 signature (0x200 = left button);
+//                    both hex. -m 300:0004:0:10 moves right for 10 frames.
+//    -a audio.wav    capture the AVR's audio output (one 8-bit sample per
+//                    OCR2A write, i.e. per scanline, 15734 Hz) as a WAV file
 //    -g game.hex     preload a game at 0x0000 as well
 //    -n              disable frame lock
 // ============================================================================
@@ -185,6 +193,14 @@ struct SdCard {
             return 1;
         }
         if (cs_q) { cs_q = 0; out_sh = next_out(); miso = out_sh >> 7; bitcnt = 0; }
+        if (sck && !sck_q && bitcnt != 0 && !(mosi & 1) && cmdlen == 0 && wr_state == 0 &&
+            outq.empty() && !mbr && (in_b & ((1u << bitcnt) - 1)) == ((1u << bitcnt) - 1)) {
+            // command start bit off the byte grid: CS went low while a byte
+            // was still being clocked (PFF's send_cmd does this when SPIF is
+            // left set by the kernel's timed SPI RAM routines). Real cards find
+            // the start bit, so resynchronise to it.
+            in_b = 0; bitcnt = 1; sck_q = sck; return miso;
+        }
         if (sck && !sck_q) {                       // rising: sample MOSI
             in_b = (in_b << 1) | (mosi & 1);
             if (++bitcnt == 8) { bitcnt = 0; byte_in(in_b); }
@@ -199,6 +215,29 @@ struct SdCard {
 
 // ---------------------------------------------------------------------------
 struct Press { int frame, len; uint16_t mask; };
+struct Mouse { int frame, len; uint16_t ext, btn; };
+
+// minimal WAV writer: 8-bit unsigned mono
+struct WavOut {
+    FILE* f = nullptr; uint32_t n = 0;
+    bool open(const char* fn, uint32_t rate) {
+        f = fopen(fn, "wb");
+        if (!f) { perror(fn); return false; }
+        uint8_t h[44] = {'R','I','F','F',0,0,0,0,'W','A','V','E','f','m','t',' ',16,0,0,0,1,0,1,0};
+        for (int i = 0; i < 4; i++) { h[24 + i] = rate >> (8 * i); h[28 + i] = rate >> (8 * i); }
+        h[32] = 1; h[34] = 8; memcpy(h + 36, "data", 4);
+        fwrite(h, 1, 44, f);
+        return true;
+    }
+    void put(uint8_t v) { if (f) { fputc(v, f); n++; } }
+    void close() {
+        if (!f) return;
+        uint32_t riff = 36 + n;
+        fseek(f, 4, SEEK_SET);  fwrite(&riff, 4, 1, f);   // little-endian host
+        fseek(f, 40, SEEK_SET); fwrite(&n, 4, 1, f);
+        fclose(f); f = nullptr;
+    }
+};
 
 int main(int argc, char** argv)
 {
@@ -211,11 +250,20 @@ int main(int argc, char** argv)
     int pad_conn = 1;
     std::set<int> dump;
     std::vector<Press> presses;
+    std::vector<Mouse> mice;
+    int mouse_ext = -1;              // mouse extended word this frame, -1 = no mouse
+    const char* wavfn = nullptr;
     for (int i = 2; i < argc; i++) {
         if (!strcmp(argv[i], "-d") && i + 1 < argc) diskfn = argv[++i];
         else if (!strcmp(argv[i], "-g") && i + 1 < argc) gamefn = argv[++i];
         else if (!strcmp(argv[i], "-t") && i + 1 < argc) total_frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-n")) lock = false;
+        else if (!strcmp(argv[i], "-a") && i + 1 < argc) wavfn = argv[++i];
+        else if (!strcmp(argv[i], "-m") && i + 1 < argc) {
+            Mouse ms; unsigned e, b;
+            sscanf(argv[++i], "%d:%x:%x:%d", &ms.frame, &e, &b, &ms.len); ms.ext = e; ms.btn = b;
+            mice.push_back(ms);
+        }
         else if (!strcmp(argv[i], "-u")) pad_conn = 0;
         else if (!strcmp(argv[i], "-f") && i + 1 < argc) {
             std::string s = argv[++i]; size_t p = 0;
@@ -252,6 +300,9 @@ int main(int argc, char** argv)
     // load flash during reset
     int ldw = 0;
     std::vector<uint8_t> fb(720 * 480 * 3);
+    WavOut wav;
+    if (wavfn && !wav.open(wavfn, 15734)) return 2;
+    int snd_tog_q = -1, latch_q = 0;
     int hframe = 0, prev_cx = -1, prev_cy = -1;
     uint64_t last_report = 0;
 
@@ -284,6 +335,22 @@ int main(int argc, char** argv)
         if (cpu_edge && t->clk) {
             if (t->cpu_ce) ce_cycles++; else wait_cycles++;
             t->sd_miso = sd.step(t->sd_sck, t->sd_mosi, t->sd_cs_n);
+            if (wavfn) {
+                int tg = R->sim_system__DOT__sys__DOT__snd_tog;
+                if (snd_tog_q >= 0 && tg != snd_tog_q) wav.put(R->sim_system__DOT__sys__DOT__snd_val);
+                snd_tog_q = tg;
+            }
+            {   // SNES mouse: after each latch, put the 16 extended bits
+                // behind the 16 button bits in the pad emulator's shift register
+                int l = R->sim_system__DOT__sys__DOT__core__DOT__pad1__DOT__l_q;
+                if (mouse_ext >= 0 && latch_q && !l) {
+                    uint32_t sr = R->sim_system__DOT__sys__DOT__core__DOT__pad1__DOT__sr & 0xFFFF;
+                    for (int k = 0; k < 16; k++)
+                        if (!((mouse_ext >> (15 - k)) & 1)) sr |= 1u << (16 + k);
+                    R->sim_system__DOT__sys__DOT__core__DOT__pad1__DOT__sr = sr;
+                }
+                latch_q = l;
+            }
             { static int sck_q = 0; if (t->sd_sck && !sck_q) spi_edges++; sck_q = t->sd_sck;
               if (!t->sd_cs_n) cs_low++; }
             t->eval();
@@ -307,6 +374,10 @@ int main(int argc, char** argv)
                 // controller script (per HDMI frame)
                 uint16_t b = 0;
                 for (auto& pr : presses) if (hframe >= pr.frame && hframe < pr.frame + pr.len) b |= pr.mask;
+                mouse_ext = -1;
+                for (auto& ms : mice) if (hframe >= ms.frame && hframe < ms.frame + ms.len) {
+                    b = 0x8000 | ms.btn; mouse_ext = ms.ext;
+                }
                 t->pad1_buttons = b;
                 if (hframe % 10 == 0 || dump.count(hframe - 1)) {
                     printf("frame %4d: cpu %llu cyc, paused %.2f%%, locked %d, pc %04X, sd cmds %llu reads %llu writes %llu, sdram err %u, sck %llu cslow %llu\n",
@@ -321,6 +392,7 @@ int main(int argc, char** argv)
             prev_cx = cx; prev_cy = cy;
         }
     }
+    wav.close();
     printf("done: %d HDMI frames, %llu AVR cycles (%llu active)\n", hframe,
            (unsigned long long)cpu_cycles, (unsigned long long)ce_cycles);
     if (sd.img) fclose(sd.img);
