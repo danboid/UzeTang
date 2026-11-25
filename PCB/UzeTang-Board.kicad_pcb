@@ -17296,7 +17296,7 @@
 		(descr "C, Disc series, Radial, pin pitch=2.50mm, , diameter*width=3.8*2.6mm^2, Capacitor, http://www.vishay.com/docs/45233/krseries.pdf")
 		(tags "C Disc series Radial pin pitch 2.50mm  diameter 3.8mm width 2.6mm Capacitor")
 		(property "Reference" "C1"
-			(at 1.25 -2.55 0)
+			(at 1.25 2.4964 0)
 			(layer "F.SilkS")
 			(uuid "e16d3de1-a48a-49ae-89c2-eff0c9c8dc89")
 			(effects
@@ -18016,6 +18016,7 @@
 		(property "Reference" "U1"
 			(at 0 -31.5 180)
 			(layer "F.SilkS")
+			(hide yes)
 			(uuid "001f2742-498e-4c61-8044-64090a36bbe5")
 			(effects
 				(font
@@ -20988,10 +20989,10 @@
 			)
 		)
 	)
-	(gr_text "EXT"
-		(at 140.0011 125.5036 0)
+	(gr_text "AUDIO L"
+		(at 145.7011 77.6036 0)
 		(layer "F.SilkS")
-		(uuid "1a28ca32-4c73-4fd2-9178-571ea1714118")
+		(uuid "b243c16c-cc88-4b27-bb22-2098451cfae1")
 		(effects
 			(font
 				(size 1 1)
@@ -20999,10 +21000,10 @@
 			)
 		)
 	)
-	(gr_text "AUDIO L"
-		(at 145.7011 77.6036 0)
+	(gr_text "EXT"
+		(at 154 125.5 0)
 		(layer "F.SilkS")
-		(uuid "b243c16c-cc88-4b27-bb22-2098451cfae1")
+		(uuid "1a28ca32-4c73-4fd2-9178-571ea1714118")
 		(effects
 			(font
 				(size 1 1)
