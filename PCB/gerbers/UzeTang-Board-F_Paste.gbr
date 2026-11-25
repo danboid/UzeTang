@@ -1,12 +1,12 @@
-%TF.GenerationSoftware,KiCad,Pcbnew,7.0.11+dfsg-1build4*%
-%TF.CreationDate,2026-11-23T15:00:16+00:00*%
-%TF.ProjectId,UzeTang-Board,557a6554-616e-4672-9d42-6f6172642e6b,rev?*%
-%TF.SameCoordinates,Original*%
-%TF.FileFunction,Paste,Top*%
-%TF.FilePolarity,Positive*%
+G04 #@! TF.GenerationSoftware,KiCad,Pcbnew,10.0.8*
+G04 #@! TF.CreationDate,2026-11-25T04:11:25+00:00*
+G04 #@! TF.ProjectId,UzeTang-Board,557a6554-616e-4672-9d42-6f6172642e6b,rev?*
+G04 #@! TF.SameCoordinates,Original*
+G04 #@! TF.FileFunction,Paste,Top*
+G04 #@! TF.FilePolarity,Positive*
 %FSLAX46Y46*%
 G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
-G04 Created by KiCad (PCBNEW 7.0.11+dfsg-1build4) date 2026-11-23 15:00:16*
+G04 Created by KiCad (PCBNEW 10.0.8) date 2026-11-25 04:11:25*
 %MOMM*%
 %LPD*%
 G01*
@@ -16,7 +16,7 @@ G04 APERTURE LIST*
 %ADD12R,1.100000X1.800000*%
 G04 APERTURE END LIST*
 D10*
-%TO.C,J3*%
+G04 #@! TO.C,J3*
 X175551100Y-94433600D03*
 X178051100Y-94433600D03*
 X179801100Y-94433600D03*
@@ -32,5 +32,5 @@ X167571100Y-73433600D03*
 X197071100Y-72283600D03*
 D12*
 X195321100Y-94433600D03*
-%TD*%
+G04 #@! TD*
 M02*

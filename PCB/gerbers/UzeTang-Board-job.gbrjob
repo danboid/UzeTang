@@ -3,9 +3,9 @@
     "GenerationSoftware": {
       "Vendor": "KiCad",
       "Application": "Pcbnew",
-      "Version": "7.0.11+dfsg-1build4"
+      "Version": "10.0.8"
     },
-    "CreationDate": "2026-11-23T15:00:16+00:00"
+    "CreationDate": "2026-11-25T04:11:26+00:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
@@ -24,8 +24,8 @@
   "DesignRules": [
     {
       "Layers": "Outer",
-      "PadToPad": 0.2,
-      "PadToTrack": 0.2,
+      "PadToPad": 0.25,
+      "PadToTrack": 0.25,
       "TrackToTrack": 0.25,
       "MinLineWidth": 0.3,
       "TrackToRegion": 0.4,
@@ -34,42 +34,47 @@
   ],
   "FilesAttributes": [
     {
-      "Path": "UzeTang-Board-F_Cu.gtl",
+      "Path": "UzeTang-Board-F_Cu.gbr",
       "FileFunction": "Copper,L1,Top",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "UzeTang-Board-B_Cu.gbl",
+      "Path": "UzeTang-Board-B_Cu.gbr",
       "FileFunction": "Copper,L2,Bot",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "UzeTang-Board-F_Paste.gtp",
+      "Path": "UzeTang-Board-F_Paste.gbr",
       "FileFunction": "SolderPaste,Top",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "UzeTang-Board-F_Silkscreen.gto",
+      "Path": "UzeTang-Board-B_Paste.gbr",
+      "FileFunction": "SolderPaste,Bot",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "UzeTang-Board-F_Silkscreen.gbr",
       "FileFunction": "Legend,Top",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "UzeTang-Board-B_Silkscreen.gbo",
+      "Path": "UzeTang-Board-B_Silkscreen.gbr",
       "FileFunction": "Legend,Bot",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "UzeTang-Board-F_Mask.gts",
+      "Path": "UzeTang-Board-F_Mask.gbr",
       "FileFunction": "SolderMask,Top",
       "FilePolarity": "Negative"
     },
     {
-      "Path": "UzeTang-Board-B_Mask.gbs",
+      "Path": "UzeTang-Board-B_Mask.gbr",
       "FileFunction": "SolderMask,Bot",
       "FilePolarity": "Negative"
     },
     {
-      "Path": "UzeTang-Board-Edge_Cuts.gm1",
+      "Path": "UzeTang-Board-Edge_Cuts.gbr",
       "FileFunction": "Profile",
       "FilePolarity": "Positive"
     }
@@ -85,24 +90,29 @@
     },
     {
       "Type": "SolderMask",
+      "Thickness": 0.01,
       "Name": "Top Solder Mask"
     },
     {
       "Type": "Copper",
+      "Thickness": 0.035,
       "Name": "F.Cu"
     },
     {
       "Type": "Dielectric",
+      "Thickness": 1.51,
       "Material": "FR4",
       "Name": "F.Cu/B.Cu",
       "Notes": "Type: dielectric layer 1 (from F.Cu to B.Cu)"
     },
     {
       "Type": "Copper",
+      "Thickness": 0.035,
       "Name": "B.Cu"
     },
     {
       "Type": "SolderMask",
+      "Thickness": 0.01,
       "Name": "Bottom Solder Mask"
     },
     {
