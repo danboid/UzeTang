@@ -1,5 +1,7 @@
 # UzeTang
 
+<img src="UzeTang-logo.png" alt="UzeTang logo" />
+
 A [Uzebox](https://uzebox.org) console core for the **Sipeed Tang Nano 20K**
 FPGA, based on the [Uzebox Omega](https://github.com/danboid/uzebox-omega) design.
 
